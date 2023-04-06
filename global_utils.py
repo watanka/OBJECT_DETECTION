@@ -3,6 +3,9 @@ import matplotlib.pyplot as plt
 import cv2
 import numpy as np
 
+def MAP(preds, gts, confidence_threshold, iou_threshold, classes,) :
+    ## TODO
+    pass
 
 
 def IoU(pred, gt) :
