@@ -39,9 +39,10 @@ def convert_prediction(label_grid, num_bboxes, num_classes) :
             y0 = gridsize * j
             x0 = gridsize * i
             x, y, w, h, confidence_score = xywh_grid[j][i].detach().cpu().numpy()
+            pred_cls = max_probability_class_grid[j][i].detach().cpu().numpy()
 
             bboxes.append([
-                            x + x0, y + y0, w, h, confidence_score
+                            pred_cls, x + x0, y + y0, w, h, confidence_score
                             ])
 
     

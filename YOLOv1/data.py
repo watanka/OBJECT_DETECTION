@@ -19,16 +19,20 @@ class BDDDataset(Dataset) :
     def __init__(self, imgdir, jsonfile, num_grid, num_classes, numBox, transform = None ) :
         super().__init__()
         self.imgdir = imgdir
-        self.imgfiles = glob(os.path.join(self.imgdir, '*.jpg'))
-        self.imgfiles = sorted(self.imgfiles)
+        # self.imgfiles = glob(os.path.join(self.imgdir, '*.jpg'))
+        # self.imgfiles = sorted(self.imgfiles)
         
         with open(jsonfile, 'r') as f :
             json_infos = json.load(f)
         self.json_infos = sorted(json_infos, key = lambda x : x['name'])
 
+        self.imgfiles = []
+        for info in json_infos :
+            self.imgfiles.append(os.path.join(self.imgdir, info['name']))
+
         ## make sure json information and imgfile are matched
         for info, imgfile in tqdm(zip(self.json_infos, self.imgfiles), desc = 'validate json and image matching...') :
-            assert os.path.basename(imgfile) == info['name']
+            assert os.path.basename(imgfile) == info['name'], f"{imgfile}, {info['name']}"
 
         self.num_grid = num_grid
         self.num_classes = num_classes
@@ -51,8 +55,8 @@ class BDDDataset(Dataset) :
         for info in json_info :
             label = info['category']
             coord = info['box2d']
-            x, y = coord['x'], coord['y']
-            w, h = coord['w'], coord['h']
+            x, y = abs(float(coord['x'])), abs(float(coord['y']))
+            w, h = float(coord['w']), float(coord['h'])
             label = classes_dict[label]
             
             bboxes.append([x,y,w,h])

@@ -7,11 +7,15 @@ with slight modification with added BatchNorm.
 import torch
 import torch.nn as nn
 from torch import optim
-
 import pytorch_lightning as pl
 
-from loss import YOLOLoss
+import matplotlib.pyplot as plt
 
+from loss import YOLOLoss
+from utils import convert_prediction
+import sys
+sys.path.append('../')
+from global_utils import visualize
 """ 
 Information about architecture config:
 Tuple is structured by (kernel_size, filters, stride, padding) 
@@ -138,12 +142,28 @@ class Yolov1(pl.LightningModule):
 
     def training_step(self, batch, batch_idx) :
         img_batch, label_grid = batch
-        img_batch = img_batch
-        label_grid = label_grid
-
+        
         pred = self.forward(img_batch)
         pred = pred.reshape(-1, self.num_grid, self.num_grid, (self.num_boxes * 5 + self.num_classes))
 
         loss = self.yolo_loss(pred, label_grid)
         self.log('train_loss', loss)
         return loss
+
+    def validation_step(self, batch, batch_idx) :
+        img_batch, label_grid = batch
+        pred = self.forward(img_batch)
+        pred = pred.reshape(-1, self.num_grid, self.num_grid, (self.num_boxes * 5 + self.num_classes))
+
+        loss = self.yolo_loss(pred, label_grid)
+        self.log('val_loss', loss)
+
+        for p,img in zip(pred, img_batch) :
+            img = img.permute(1,2,0)
+            bboxes = convert_prediction(p, num_bboxes = self.num_boxes, num_classes = self.num_classes)
+            visualized_img = visualize(img, bboxes)
+            plt.imsave('val_imgs/validation_img.jpg', visualized_img)
+            break
+
+        
+

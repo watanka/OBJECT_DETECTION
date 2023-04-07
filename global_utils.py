@@ -47,22 +47,24 @@ def IoU(pred, gt) :
 
     return intersection / (total_area - intersection + 1e-6) # add buffer
 
-def MAP(pred, gt, iou_threshold, confidence_threshold) :
-    '''
-    Calculate Mean Average Precision
-    '''
-
-    pass
 
 
 BOX_COLOR = (255, 0, 0) # Red
 TEXT_COLOR = (255, 255, 255) # white
+classes = ['traffic sign', 'traffic light', 'car', 'rider', 'motorcycle', 'pedestrian', 'bus', 'truck', 'bicycle', 'other vehicle', 'train', 'trailer', 'other person']
 
-def visualize_bbox(img, bbox, class_name, color=BOX_COLOR, thickness=1):
-    """Visualizes a single bounding box on the image"""
+classes_dict = {c : i for i, c in enumerate(classes)}
+label_dict = {num : clsname for clsname, num in classes_dict.items()}
+
+def visualize_bbox(img, bbox, color=BOX_COLOR, thickness=1):
+    """
+    bbox = [pred_cls, x, y, w, h, confidence_score]
+    Visualizes a single bounding box on the image
+    
+    """
     img_h, img_w = img.shape[:2]
 
-    x, y, w, h = bbox
+    pred_cls, x, y, w, h, confidence_score = bbox
     x_min, x_max, y_min, y_max = x - w/2, x + w/2, y - h/2, y + h/2
     x_min = int(img_w * x_min)
     x_max = int(img_w * x_max)
@@ -71,11 +73,11 @@ def visualize_bbox(img, bbox, class_name, color=BOX_COLOR, thickness=1):
 
     cv2.rectangle(img, (x_min, y_min), (x_max, y_max), color=color, thickness=thickness)
     
-    ((text_width, text_height), _) = cv2.getTextSize(class_name, cv2.FONT_HERSHEY_SIMPLEX, 0.35, 1)    
+    ((text_width, text_height), _) = cv2.getTextSize(label_dict[pred_cls], cv2.FONT_HERSHEY_SIMPLEX, 0.35, 1)    
     cv2.rectangle(img, (x_min, y_min - int(1.3 * text_height)), (x_min + text_width, y_min), BOX_COLOR, -1)
     cv2.putText(
         img,
-        text=class_name,
+        text=label_dict[pred_cls],
         org=(x_min, y_min - int(0.3 * text_height)),
         fontFace=cv2.FONT_HERSHEY_SIMPLEX,
         fontScale=0.35, 
@@ -84,17 +86,18 @@ def visualize_bbox(img, bbox, class_name, color=BOX_COLOR, thickness=1):
     )
     return img
 
-def visualize(image, bboxes, category_ids):
-    if type(image) == torch.Tensor :
-        image = image.permute(1,2,0).detach().cpu().numpy()
+def visualize(img, bboxes):
+    if type(img) == torch.Tensor :
+        img = image.permute(1,2,0).detach().cpu().numpy()
     else :
-        image = image.copy()
-    for bbox, category_id in zip(bboxes, category_ids):
-        class_name = category_id
-        img = visualize_bbox(img, bbox, class_name)
-    plt.figure(figsize=(12, 12))
-    plt.axis('off')
-    plt.imshow(img)
+        img = img.copy()
+    for bbox in zip(bboxes, category_ids):
+        
+        img = visualize_bbox(img, bbox)
+    # plt.figure(figsize=(12, 12))
+    # plt.axis('off')
+    # plt.imshow(img)
+    return img
 
 def visualize_gridbbox(img, label_grid, numBox = 2, color = BOX_COLOR, thickness = 1) :
     H, W = img.shape[:2]
