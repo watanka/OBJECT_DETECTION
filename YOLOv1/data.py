@@ -9,6 +9,7 @@ import numpy as np
 
 import torch
 from torch.utils.data import Dataset
+import albumentations as A
 
 classes = ['traffic sign', 'traffic light', 'car', 'rider', 'motorcycle', 'pedestrian', 'bus', 'truck', 'bicycle', 'other vehicle', 'train', 'trailer', 'other person']
 
@@ -48,18 +49,29 @@ class BDDDataset(Dataset) :
         json_info = json_info['labels'] if 'labels' in json_info.keys() else []
 
         image = plt.imread(imgfile) / 255.
-        
+
+        HEIGHT, WIDTH = image.shape[:2]
         
         bboxes = []
         labels = []
         for info in json_info :
             label = info['category']
             coord = info['box2d']
-            x, y = abs(float(coord['x'])), abs(float(coord['y']))
-            w, h = float(coord['w']), float(coord['h'])
+            # x, y = abs(float(coord['x'])), abs(float(coord['y']))
+            # w, h = float(coord['w']), float(coord['h'])
+
+            x1, y1 = coord['x1'], coord['y1']
+            x2, y2 = coord['x2'], coord['y2']
             label = classes_dict[label]
+
+            # bbox_albu = A.core.bbox_utils.convert_bbox_from_albumentations(np.array([x1, y1, x2, y2, label]), target_format='yolo', rows=HEIGHT, cols=WIDTH, check_validity= False)
+            # print('bbox_albu : ', np.array(bbox_albu))
+            # bbox_yolo = A.core.bbox_utils.convert_bbox_from_albumentations(np.array(bbox_albu), target_format='yolo', rows=HEIGHT, cols=WIDTH, check_validity=False)
+            # print('bbox_yolo : ', bbox_yolo)
             
-            bboxes.append([x,y,w,h])
+            
+            # bboxes.append([x,y,w,h])
+            bboxes.append([x1,y1,x2,y2])
             labels.append(label)
 
         if self.transform :
@@ -86,21 +98,28 @@ class BDDDataset(Dataset) :
 
         for bbox, label in zip(bboxes, labels) :
 
-            x, y, w, h = bbox
+            x1, y1, x2, y2 = bbox
+
+            w = x2 - x1
+            h = y2 - y1
+            x_center = (x1 + w / 2) / W
+            y_center = (y1 + h / 2) / H
+
+            
 
 
             assert H == W, f'yolov1 takes only square image size. H = {H}, W = {W}'
             gridsize = 1 / self.num_grid
 
-            grid_xidx = min(max(0, int(x // gridsize)), self.num_grid - 1) # there are cases center of bbox located at the endpoint
-            grid_yidx = min(max(0, int(y // gridsize)), self.num_grid - 1) 
+            grid_xidx = min(max(0, int(x_center // gridsize)), self.num_grid - 1) # there are cases center of bbox located at the endpoint
+            grid_yidx = min(max(0, int(y_center // gridsize)), self.num_grid - 1) 
 
             ## normalize respect to the grid point
             grid_x0 = gridsize * grid_xidx
             grid_y0 = gridsize * grid_yidx
 
-            normalized_x = (x - grid_x0) / gridsize
-            normalized_y = (y - grid_y0) / gridsize
+            normalized_x = (x_center - grid_x0) / gridsize
+            normalized_y = (y_center - grid_y0) / gridsize
 
             boxnum = grid_idxbox[grid_yidx][grid_xidx]
 
