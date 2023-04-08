@@ -65,6 +65,7 @@ def visualize_bbox(img, bbox, color=BOX_COLOR, thickness=1):
     img_h, img_w = img.shape[:2]
 
     pred_cls, x, y, w, h, confidence_score = bbox
+    
     x_min, x_max, y_min, y_max = x - w/2, x + w/2, y - h/2, y + h/2
     x_min = int(img_w * x_min)
     x_max = int(img_w * x_max)
@@ -88,11 +89,12 @@ def visualize_bbox(img, bbox, color=BOX_COLOR, thickness=1):
 
 def visualize(img, bboxes):
     if type(img) == torch.Tensor :
-        img = image.permute(1,2,0).detach().cpu().numpy()
+        img = img.permute(1,2,0).detach().cpu().numpy()
+        img = np.array(img*255., dtype = np.uint8).copy()
     else :
         img = img.copy()
-    for bbox in zip(bboxes, category_ids):
-        
+
+    for bbox in bboxes:
         img = visualize_bbox(img, bbox)
     # plt.figure(figsize=(12, 12))
     # plt.axis('off')
@@ -299,7 +301,7 @@ class MeanAveragePrecisionMetrics :
 
         for cls_label in self.classes :
             for iou_threshold in self.iou_threshold_range :
-                ## round by 3 decimal points
+                ## round by 3 decimal places
                 precision = round(self.TOTAL_TP[cls_label][iou_threshold] / (self.TOTAL_TP[cls_label][iou_threshold] + self.TOTAL_FP[cls_label][iou_threshold] + 1e-6), 3) # add 1e-6 to prevent divisionbyzero
                 recall = round(self.TOTAL_TP[cls_label][iou_threshold] / (self.TOTAL_TP[cls_label][iou_threshold] + self.TOTAL_FN[cls_label][iou_threshold] + 1e-6), 3)
 

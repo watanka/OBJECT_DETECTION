@@ -22,17 +22,16 @@ train_data_transform = A.Compose([
     # A.RandomCrop(width = 446, height = 446),
     
     A.RandomCrop(width = 446, height = 446, always_apply = True, p = 1.0),
-    
     A.PadIfNeeded(min_width = 446, min_height = 446, border_mode=None),
     pytorch.transforms.ToTensorV2(),
-], bbox_params = A.BboxParams(format = 'yolo', label_fields = ['label'], min_visibility = 0.8))
+], bbox_params = A.BboxParams(format = 'pascal_voc', label_fields = ['label'], min_visibility = 0.8))
 
 ## TODO : data_transform for inference
 val_data_transform = A.Compose([
-    A.geometric.resize.SmallestMaxSize(max_size = 446),
+    A.geometric.resize.LongestMaxSize(max_size = 446),
     A.PadIfNeeded(min_width = 446, min_height = 446, border_mode=None),
     pytorch.transforms.ToTensorV2(),
-], bbox_params = A.BboxParams(format = 'yolo', label_fields = ['label'], min_visibility = 0.8))
+], bbox_params = A.BboxParams(format = 'pascal_voc', label_fields = ['label'], min_visibility = 0.8))
 
 
 ## TODO : organize configuration format
@@ -43,14 +42,14 @@ model_dict = dict(num_grid = 7, num_boxes = 2, num_classes = 13)
 model = Yolov1(num_grid = 7, num_boxes = 2, num_classes = 13).to(device)
 
 train_dataset = BDDDataset(imgdir = '../data/images/train', 
-           jsonfile = '../data/label/yolo_det_train.json', 
+           jsonfile = '../data/label/det_train.json', 
            num_grid = 7, 
            num_classes = 13, 
            numBox = 2 , 
            transform = train_data_transform )
 
 val_dataset = BDDDataset(imgdir = '../data/images/val',
-                         jsonfile = '../data/label/yolo_det_val.json',
+                         jsonfile = '../data/label/det_val.json',
                          num_grid = 7,
                          num_classes = 13,
                          numBox = 2,

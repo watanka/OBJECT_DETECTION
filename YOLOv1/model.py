@@ -159,7 +159,6 @@ class Yolov1(pl.LightningModule):
         self.log('val_loss', loss)
 
         for p,img in zip(pred, img_batch) :
-            img = img.permute(1,2,0)
             bboxes = convert_prediction(p, num_bboxes = self.num_boxes, num_classes = self.num_classes)
             visualized_img = visualize(img, bboxes)
             plt.imsave('val_imgs/validation_img.jpg', visualized_img)
