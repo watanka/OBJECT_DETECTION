@@ -160,3 +160,167 @@ def nms(bboxes, threshold, iou_threshold) :
 
 
 
+
+''' 
+reference : https://github.com/rafaelpadilla/Object-Detection-Metrics
+usage : validation, evaluation. 
+predictions and gts will be handed by reading gtfile directly, since dataloader limits the number of gt bounding box
+'''
+
+## MAP
+
+class MeanAveragePrecisionMetrics :
+    def __init__(self, gts, preds, iou_threshold_range, confidence_threshold) :
+        '''
+        gts, preds = [[[class, x, y, w, h, c],...], ...] # imgs x bboxes
+
+        classes : should be collected from gt.
+        iou_threshold_range : (min_threshold, interval, max_threshold). e.g) IoU(0.6, 0.1, 0.9) = [0.6, 0.7, 0.8, 0.9]
+        confidence_threshold : predicted bounding boxes are filtered by confidence threshold
+        '''
+        self.gts = gts
+        self.preds = preds
+        assert len(gts) == len(preds), '# of images should be the same for predictions and ground truths.'
+        
+        cnt_cls = set()
+        for gts_per_img in self.gts :
+            for gt_bbox in gts_per_img :
+                cnt_cls.add(int(gt_bbox[0]))
+        self.classes = list(cnt_cls)
+
+        # convert iou_threshold_range into list
+        min_threshold, interval, max_threshold  = iou_threshold_range
+        self.iou_threshold_range = np.linspace(min_threshold, max_threshold, num= int((max_threshold - min_threshold)//interval + 1))
+        
+        self.confidence_threshold = confidence_threshold
+        self.iou_table_per_img = {imgidx : None for imgidx in range(len(gts))}
+
+        # self.total_iou_table = {clslabel : {iou_threshold : None \
+        #                                         for iou_threshold in self.iou_threshold_range} \
+        #                                             for clslabel in range(num_classes)}
+
+        self.TOTAL_TP = [{iou_threshold : 0 for iou_threshold in self.iou_threshold_range} for _ in range(len(self.classes))]
+        self.TOTAL_FP = [{iou_threshold : 0 for iou_threshold in self.iou_threshold_range} for _ in range(len(self.classes))]
+        self.TOTAL_FN = [{iou_threshold : 0 for iou_threshold in self.iou_threshold_range} for _ in range(len(self.classes))]
+
+        self.total_statistics = []
+
+
+    def calculate_PR(self, imgidx, pred, gt, iou_threshold) :
+        '''
+        calculate precision and recall per classes
+        Recall = TP / (TP+FN)
+        Precision = TP / (TP + FP)
+        1. match preds and gts using IoU
+        2. matched preds will be TP, and remaining unmatched preds will be FP, and unmatched gt are FN.
+        '''
+
+        # bboxes = [[class,x,y,w,h,c],...]. c = confidence_score. filter predicted bboxes by confidence_threshold.
+        
+        pred = np.array([p for p in pred if p[-1] > self.confidence_threshold])
+        
+        
+        # 행 : pred, 열 : gt
+        if self.iou_table_per_img[imgidx] is not None :
+            iou_table = self.iou_table_per_img[imgidx]
+        else : 
+            iou_table = torch.zeros((len(pred), len(gt)))
+            for j, pred_bbox in enumerate(pred) :
+                for i, gt_bbox in enumerate(gt) :
+                    iou_table[j][i] = IoU(pred_bbox[..., 1:], gt_bbox[..., 1:])
+            self.iou_table_per_img[imgidx] = iou_table
+        # if there are more than one prediction box matched with on gt box, then we choose the predicition with the highest IoU as TP, and treat other matches as FP.     
+        filtered_iou_table = torch.zeros_like(iou_table)
+        filtered_iou_table[torch.argmax(iou_table, axis = 0), torch.arange(iou_table.shape[1])] = torch.max(iou_table, axis = 0)[0] # this will leave only one highest IoU per gts
+        
+        result = filtered_iou_table > iou_threshold
+
+        TP = result.any(axis = 1).sum()
+        FP = len(pred) - TP
+        FN = len(gt) - result.any(axis = 0).sum()
+
+        return TP.item(), FP.item(), FN.item()
+
+    def calculate_average_precision(self, precision, recall) :
+
+        precision = list(precision)[:] # [:] = copy list
+        recall = list(recall)[:]
+
+        mean_precision = [0] + precision + [0] 
+        mean_recall = [0] + recall + [0]
+        """
+        This part makes the precision monotonically decreasing
+            (goes from the end to the beginning)
+        """
+        for i in range(len(mean_precision)-2, -1, -1) :
+            mean_precision[i] = max(mean_precision[i], mean_precision[i+1])
+        
+        """
+        This part creates a list of indexes where the recall changes
+        """
+        i_list = []
+        for i in range(1, len(mean_recall)) :
+            if mean_recall[i] != mean_recall[i-1] :
+                i_list.append(i)
+        """
+        The Average Precision (AP) is the area under the curve
+            (numerical integration)
+        """
+        average_precision = 0.0
+        for i in i_list :
+            average_precision += ((mean_recall[i] - mean_recall[i-1]) * mean_precision[i])
+
+        # average_precision = torch.mean(torch.trapz(torch.tensor(precision), torch.tensor(recall))).item()
+        return average_precision
+
+
+    def calculate(self) :
+        ## TODO : add typing of variables
+        '''
+        preds : list of numpy array. []
+        gts 
+        iou_threshold_range : (minimum_threshold, maximum_threshold, interval)
+        '''
+        for imgidx, (pred_by_img, gt_by_img) in enumerate(zip(self.preds, self.gts)) :
+            for cls_label in self.classes :
+                cls_preds = pred_by_img[pred_by_img[..., 0] == cls_label]
+                cls_gts = gt_by_img[gt_by_img[..., 0] == cls_label]
+
+                # assert (cls_preds.shape == cls_gts.shape) and (cls_preds.ndim == cls_gts.ndim == 2 and cls_preds.shape[-1] == cls_gts.shape[-1] == 5), \
+                #             'pred and gt shape = (# of bboxes over images, len([x,y,w,h,c]) )'
+
+                for iou_threshold in self.iou_threshold_range :
+                    TP, FP, FN = self.calculate_PR(imgidx, cls_preds, cls_gts, iou_threshold)
+                    self.TOTAL_TP[cls_label][iou_threshold] += TP
+                    self.TOTAL_FP[cls_label][iou_threshold] += FP
+                    self.TOTAL_FN[cls_label][iou_threshold] += FN
+
+        # calculate Precision and Recall
+
+        for cls_label in self.classes :
+            for iou_threshold in self.iou_threshold_range :
+                ## round by 3 decimal points
+                precision = round(self.TOTAL_TP[cls_label][iou_threshold] / (self.TOTAL_TP[cls_label][iou_threshold] + self.TOTAL_FP[cls_label][iou_threshold] + 1e-6), 3) # add 1e-6 to prevent divisionbyzero
+                recall = round(self.TOTAL_TP[cls_label][iou_threshold] / (self.TOTAL_TP[cls_label][iou_threshold] + self.TOTAL_FN[cls_label][iou_threshold] + 1e-6), 3)
+
+                self.total_statistics.append([cls_label, iou_threshold, precision, recall])
+
+        self.total_statistics = np.array(self.total_statistics)
+
+        # mean average precision = sum(avg_cls_precision) / num_classes. avg_cls_precision = sum of cls_precisions in different recalls / 
+        mean_average_precision = 0
+        
+        for cls_label in self.classes :
+            class_statistics = self.total_statistics[self.total_statistics[..., 0] == cls_label][...,2:4].tolist() # ious x [precision, recall]
+            class_statistics = sorted(class_statistics, key = lambda x : x[1])
+            precision, recall = zip(*class_statistics)
+            
+            average_precision = self.calculate_average_precision(precision, recall)
+            mean_average_precision += average_precision
+            
+
+        mean_average_precision /= len(self.classes)
+
+        return mean_average_precision
+
+    
