@@ -160,7 +160,8 @@ class Yolov1(pl.LightningModule):
 
         for p,img in zip(pred, img_batch) :
             bboxes = convert_prediction(p, num_bboxes = self.num_boxes, num_classes = self.num_classes)
-            visualized_img = visualize(img, bboxes)
+            bboxes_after_nms = nms(bboxes)
+            visualized_img = visualize(img, bboxes_after_nms)
             plt.imsave('val_imgs/validation_img.jpg', visualized_img)
             break
 

@@ -137,13 +137,13 @@ def visualize_gridbbox(img, label_grid, numBox = 2, color = BOX_COLOR, thickness
     
 def nms(bboxes, threshold, iou_threshold) :
     '''
-    bboxes : [[x,y,w,h,c], ]. c = confidence score
+    bboxes : [[class, x,y,w,h,c], ]. c = confidence score
     threshold : confidence thresholds
     iou_threshold : if boxes overlap over iou_threshold, eliminate from the candidates
     '''
-    bboxes = [box for box in bboxes if box[4] > threshold]
+    bboxes = [box for box in bboxes if box[-1] > threshold]
     # sort by highest confidence
-    bboxes = sorted(bboxes, key = lambda x : x[4]) 
+    bboxes = sorted(bboxes, key = lambda x : x[-1]) 
 
     bboxes_after_nms = []
     while bboxes :
@@ -152,7 +152,7 @@ def nms(bboxes, threshold, iou_threshold) :
         bboxes = [
             box
             for box in bboxes
-            if box[4] != chosen_box[4] \
+            if box[-1] != chosen_box[-1] \
                 or IoU(np.array(box), np.array(chosen_box)) < iou_threshold
         ]
 
