@@ -32,11 +32,21 @@ def IoU(pred, gt) :
     gt_x2 = gt_x_center + gt_w / 2
     gt_y2 = gt_y_center + gt_h / 2
 
+    # if type(pred_x1) == torch.tensor and type(pred_x1) == torch.tensor and type(pred_x1) == torch.tensor and type(pred_x1) == torch.tensor : 
+
     x1 = torch.max(pred_x1, gt_x1)
     y1 = torch.max(pred_y1, gt_y1)
 
     x2 = torch.min(pred_x2, gt_x2)
     y2 = torch.min(pred_y2, gt_y2)
+
+    # elif type(pred_x1) == np.array and type(pred_x2) == np.array and type(pred_y1) == np.array and type(pred_y2) == np.array :
+
+    #     x1 = np.max(pred_x1, gt_x1)
+    #     y1 = np.max(pred_y1, gt_y1)
+
+    #     x2 = np.min(pred_x2, gt_x2)
+    #     y2 = np.min(pred_y2, gt_y2)
 
     intersection = (x2 - x1).clamp(0) * (y2 - y1).clamp(0)
     total_area = ((pred_x2 - pred_x1) * (pred_y2 - pred_y1)) + ((gt_x2 - gt_x1) * (gt_y2 - gt_y1))
@@ -149,7 +159,7 @@ def nms(bboxes, threshold, iou_threshold) :
             box
             for box in bboxes
             if box[-1] != chosen_box[-1] \
-                or IoU(np.array(box), np.array(chosen_box)) < iou_threshold
+                or IoU(torch.tensor(box), torch.tensor(chosen_box)) < iou_threshold
         ]
 
         bboxes_after_nms.append(chosen_box)
