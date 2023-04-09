@@ -73,8 +73,8 @@ val_dataset = BDDDataset(
 )
 
 
-train_dataloader = DataLoader(train_dataset, batch_size= 16)
-val_dataloader = DataLoader(val_dataset)
+train_dataloader = DataLoader(train_dataset, batch_size= 16, num_workers= 4)
+val_dataloader = DataLoader(val_dataset, batch_size = 16, num_workers= 4)
 ## TODO : validation step
 
 
@@ -84,15 +84,15 @@ if __name__ == "__main__":
     tb_logger = TensorBoardLogger("tensorboard_log", name = 'yolov1')
 
     ckptCallback = ModelCheckpoint(dirpath = '', save_top_k = 2, monitor = 'val_loss')
-    trainer = pl.Trainer(max_epochs=1, 
+    trainer = pl.Trainer(max_epochs=50, 
                          accelerator="gpu", 
                          logger = tb_logger,
-                         callbacks= [ckptCallback, EarlyStopping(monitor = 'val_loss')],
-                         
+                         callbacks= [ckptCallback],
                          )
 
     trainer.fit(
         model=model, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader,
+        ckpt_path = 'epoch=6-step=30569.ckpt'
         
         
     )
