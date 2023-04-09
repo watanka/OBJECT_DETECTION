@@ -175,7 +175,7 @@ class Yolov1(pl.LightningModule):
         if batch_idx % 100 == 0 :
 
             with torch.no_grad() :
-                bboxes_batches = [nms(convert_labelgrid(p, num_bboxes=self.num_boxes, num_classes=self.num_classes), threshold = 0.2, iou_threshold = 0.5) \
+                bboxes_batches = [nms(convert_labelgrid(p, num_bboxes=self.num_boxes, num_classes=self.num_classes), threshold = 0.0, iou_threshold = 0.5) \
                                     for p in pred]
 
                 bbox_visualization = []
@@ -196,24 +196,22 @@ class Yolov1(pl.LightningModule):
         bboxes to torchmetrics input format
         bboxes = [[cls, cx, cy, w, h, conf_score],...]
         '''
-        pred_cls_batch, pred_coord_batch, pred_conf_batch = pred_bboxes_batch[..., 0:1], pred_bboxes_batch[..., 1:5], pred_bboxes_batch[..., 5:6]
-        
-        gt_cls_batch, gt_coord_batch = gt_bboxes_batch[..., 0:1], gt_bboxes_batch[..., 1:5]
-        
+        pred_cls_batch, pred_coord_batch, pred_conf_batch = pred_bboxes_batch[..., 0], pred_bboxes_batch[..., 1:5], pred_bboxes_batch[..., -1]
+        gt_cls_batch, gt_coord_batch = gt_bboxes_batch[..., 0], gt_bboxes_batch[..., 1:5]
+
         preds = [
             dict(
-                boxes = pred_coord,
-                scores = pred_conf,
-                labels = pred_cls,
-                
-            ) for pred_cls, pred_coord, pred_conf in zip(pred_cls_batch, pred_coord_batch, pred_conf_batch)
+                boxes = pred_coord_batch,
+                scores = pred_conf_batch,
+                labels = pred_cls_batch,
+            )
         ]
 
         target = [
             dict(
-                boxes = gt_coord,
-                labels = gt_cls,
-            ) for gt_cls, gt_coord in zip(gt_cls_batch, gt_coord_batch)
+                boxes = gt_coord_batch,
+                labels = gt_cls_batch,
+            )
         ]
 
         return preds, target
@@ -229,32 +227,32 @@ class Yolov1(pl.LightningModule):
         loss = self.yolo_loss(pred, label_grid_batch)
         self.log("val_loss", loss)
 
-        # with torch.no_grad() :
-        #     pred_bboxes_batch = torch.tensor([nms(convert_labelgrid(p, num_bboxes=self.num_boxes, num_classes=self.num_classes), threshold = 0.2, iou_threshold = 0.5) \
-        #                         for p in pred])
+        with torch.no_grad() :
+            pred_bboxes_batch = torch.tensor([nms(convert_labelgrid(p, num_bboxes=self.num_boxes, num_classes=self.num_classes), threshold = 0.0, iou_threshold = 0.5) \
+                                for p in pred])
 
-        #     bbox_visualization = []
-        #     for img, bboxes in zip(img_batch, pred_bboxes_batch) :
+            # bbox_visualization = []
+            # for img, bboxes in zip(img_batch.detach().cpu().numpy(), pred_bboxes_batch.detach().cpu().numpy()) :
 
-        #         bbox_visualization.append(torch.tensor(visualize(img, bboxes)))
+            #     bbox_visualization.append(torch.tensor(visualize(img, bboxes)))
 
-        #     grid_result = torch.stack(bbox_visualization).permute(0,3,1,2)
+            # grid_result = torch.stack(bbox_visualization).permute(0,3,1,2)
 
-        #     grid = torchvision.utils.make_grid(grid_result)
-        #     self.logger.experiment.add_image("bbox visualization", grid, self.global_step)
+            # grid = torchvision.utils.make_grid(grid_result)
+            # self.logger.experiment.add_image("bbox visualization", grid, self.global_step)
 
 
-            # gt_bboxes_batch = []
-            # for label_grid in label_grid_batch :
-            #     gt_bboxes_batch.append(decode_labelgrid(label_grid, num_bboxes=self.num_boxes, num_classes=self.num_classes))
-            # gt_bboxes_batch = torch.tensor(gt_bboxes_batch)
+            gt_bboxes_batch = []
+            for label_grid in label_grid_batch :
+                gt_bboxes_batch.append(decode_labelgrid(label_grid, num_bboxes=self.num_boxes, num_classes=self.num_classes))
+            gt_bboxes_batch = torch.tensor(gt_bboxes_batch)
 
-            # for pred_bboxes, gt_bboxes in tqdm(zip(pred_bboxes_batch, gt_bboxes_batch)) :
-            #     preds, target = self.get_predgt(pred_bboxes, gt_bboxes)
-            #     self.mAP.update(preds, target)
-        
+            for pred_bboxes, gt_bboxes in tqdm(zip(pred_bboxes_batch, gt_bboxes_batch)) :
+                preds, target = self.get_predgt(pred_bboxes, gt_bboxes)
+                self.mAP.update(preds = preds, target = target)
+    
 
-            # self.log_dict(self.mAP.compute())
+            self.log_dict(self.mAP.compute())
 
 
     

@@ -168,24 +168,17 @@ predictions and gts will be handed by reading gtfile directly, since dataloader 
 ## MAP
 
 class MeanAveragePrecisionMetrics :
-    def __init__(self, gts, preds, iou_threshold_range, confidence_threshold) :
+    def __init__(self, num_classes, iou_threshold_range, confidence_threshold) :
         '''
         gts, preds = [[[class, x, y, w, h, c],...], ...] # imgs x bboxes
 
-        classes : should be collected from gt.
+        
+        num_classes : updated after gt and preds come in. should be collected from gt.
         iou_threshold_range : (min_threshold, interval, max_threshold). e.g) IoU(0.6, 0.1, 0.9) = [0.6, 0.7, 0.8, 0.9]
         confidence_threshold : predicted bounding boxes are filtered by confidence threshold
         '''
-        self.gts = gts
-        self.preds = preds
-        assert len(gts) == len(preds), '# of images should be the same for predictions and ground truths.'
         
-        cnt_cls = set()
-        for gts_per_img in self.gts :
-            for gt_bbox in gts_per_img :
-                cnt_cls.add(int(gt_bbox[0]))
-        self.classes = list(cnt_cls)
-
+        self.num_classes = num_classes
         # convert iou_threshold_range into list
         min_threshold, interval, max_threshold  = iou_threshold_range
         self.iou_threshold_range = np.linspace(min_threshold, max_threshold, num= int((max_threshold - min_threshold)//interval + 1))
@@ -197,9 +190,9 @@ class MeanAveragePrecisionMetrics :
         #                                         for iou_threshold in self.iou_threshold_range} \
         #                                             for clslabel in range(num_classes)}
 
-        self.TOTAL_TP = [{iou_threshold : 0 for iou_threshold in self.iou_threshold_range} for _ in range(len(self.classes))]
-        self.TOTAL_FP = [{iou_threshold : 0 for iou_threshold in self.iou_threshold_range} for _ in range(len(self.classes))]
-        self.TOTAL_FN = [{iou_threshold : 0 for iou_threshold in self.iou_threshold_range} for _ in range(len(self.classes))]
+        self.TOTAL_TP = [{iou_threshold : 0 for iou_threshold in self.iou_threshold_range} for _ in range(self.num_classes)]
+        self.TOTAL_FP = [{iou_threshold : 0 for iou_threshold in self.iou_threshold_range} for _ in range(self.num_classes)]
+        self.TOTAL_FN = [{iou_threshold : 0 for iou_threshold in self.iou_threshold_range} for _ in range(self.num_classes)]
 
         self.total_statistics = []
 
@@ -272,15 +265,22 @@ class MeanAveragePrecisionMetrics :
         return average_precision
 
 
-    def calculate(self) :
+    def calculate(self, preds, gts) :
         ## TODO : add typing of variables
         '''
         preds : list of numpy array. []
         gts 
         iou_threshold_range : (minimum_threshold, maximum_threshold, interval)
         '''
-        for imgidx, (pred_by_img, gt_by_img) in enumerate(zip(self.preds, self.gts)) :
-            for cls_label in self.classes :
+
+        cnt_cls = set()
+        for gts_per_img in gts :
+            for gt_bbox in gts_per_img :
+                cnt_cls.add(int(gt_bbox[0]))
+        classes = list(cnt_cls)
+
+        for imgidx, (pred_by_img, gt_by_img) in enumerate(zip(preds, gts)) :
+            for cls_label in classes :
                 cls_preds = pred_by_img[pred_by_img[..., 0] == cls_label]
                 cls_gts = gt_by_img[gt_by_img[..., 0] == cls_label]
 
@@ -295,7 +295,7 @@ class MeanAveragePrecisionMetrics :
 
         # calculate Precision and Recall
 
-        for cls_label in self.classes :
+        for cls_label in classes :
             for iou_threshold in self.iou_threshold_range :
                 ## round by 3 decimal places
                 precision = round(self.TOTAL_TP[cls_label][iou_threshold] / (self.TOTAL_TP[cls_label][iou_threshold] + self.TOTAL_FP[cls_label][iou_threshold] + 1e-6), 3) # add 1e-6 to prevent divisionbyzero
@@ -308,7 +308,7 @@ class MeanAveragePrecisionMetrics :
         # mean average precision = sum(avg_cls_precision) / num_classes. avg_cls_precision = sum of cls_precisions in different recalls / 
         mean_average_precision = 0
         
-        for cls_label in self.classes :
+        for cls_label in classes :
             class_statistics = self.total_statistics[self.total_statistics[..., 0] == cls_label][...,2:4].tolist() # ious x [precision, recall]
             class_statistics = sorted(class_statistics, key = lambda x : x[1])
             precision, recall = zip(*class_statistics)
@@ -317,7 +317,7 @@ class MeanAveragePrecisionMetrics :
             mean_average_precision += average_precision
             
 
-        mean_average_precision /= len(self.classes)
+        mean_average_precision /= len(classes)
 
         return mean_average_precision
 
