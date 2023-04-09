@@ -1,4 +1,3 @@
-
 """
 Implementation of Yolo (v1) architecture
 with slight modification with added BatchNorm.
@@ -8,14 +7,18 @@ import torch
 import torch.nn as nn
 from torch import optim
 import pytorch_lightning as pl
+import torchmetrics
+from torchmetrics.detection.mean_ap import MeanAveragePrecision
 
 import matplotlib.pyplot as plt
 
 from loss import YOLOLoss
-from utils import convert_prediction
+from utils import convert_labelgrid
 import sys
-sys.path.append('../')
+
+sys.path.append("../")
 from global_utils import visualize
+
 """ 
 Information about architecture config:
 Tuple is structured by (kernel_size, filters, stride, padding) 
@@ -63,17 +66,28 @@ class Yolov1(pl.LightningModule):
         self.in_channels = in_channels
         self.darknet = self._create_conv_layers(self.architecture)
         self.fcs = self._create_fcs(**kwargs)
-    
-        self.num_grid = kwargs['num_grid']
-        self.num_boxes = kwargs['num_boxes']
-        self.num_classes = kwargs['num_classes']
-        
-        self.yolo_loss = YOLOLoss(lambda_coord = 5, lambda_noobj = 0.5, num_grid = self.num_grid, numBox = self.num_boxes)
+
+        self.num_grid = kwargs["num_grid"]
+        self.num_boxes = kwargs["num_boxes"]
+        self.num_classes = kwargs["num_classes"]
+
+        self.yolo_loss = YOLOLoss(
+            lambda_coord=5,
+            lambda_noobj=0.5,
+            num_grid=self.num_grid,
+            numBox=self.num_boxes,
+        )
+
+        self.mAP = MeanAveragePrecision(
+            box_format="cxcywh",
+            iou_type="bbox",
+            iou_thresholds=None,
+        )  # iou_thresholds = None is same as [0.5, 0.05, 0.95]
+        # self.mAP = MeanAveragePrecisionMetrics(gts, preds, iou_threshold_range, confidence_threshold)
 
     def forward(self, x):
         x = self.darknet(x)
         return self.fcs(torch.flatten(x, start_dim=1))
-
 
     def _create_conv_layers(self, architecture):
         layers = []
@@ -83,7 +97,11 @@ class Yolov1(pl.LightningModule):
             if type(x) == tuple:
                 layers += [
                     CNNBlock(
-                        in_channels, x[1], kernel_size=x[0], stride=x[2], padding=x[3],
+                        in_channels,
+                        x[1],
+                        kernel_size=x[0],
+                        stride=x[2],
+                        padding=x[3],
                     )
                 ]
                 in_channels = x[1]
@@ -120,7 +138,7 @@ class Yolov1(pl.LightningModule):
         return nn.Sequential(*layers)
 
     def _create_fcs(self, num_grid, num_boxes, num_classes):
-        
+
         S, B, C = num_grid, num_boxes, num_classes
 
         # In original paper this should be
@@ -136,34 +154,46 @@ class Yolov1(pl.LightningModule):
             nn.Linear(496, S * S * (C + B * 5)),
         )
 
-    def configure_optimizers(self) :
-        optimizer = optim.Adam(self.parameters(), lr = 1e-3)
+    def configure_optimizers(self):
+        optimizer = optim.Adam(self.parameters(), lr=1e-3)
         return optimizer
 
-    def training_step(self, batch, batch_idx) :
+    def training_step(self, batch, batch_idx):
         img_batch, label_grid = batch
-        
+
         pred = self.forward(img_batch)
-        pred = pred.reshape(-1, self.num_grid, self.num_grid, (self.num_boxes * 5 + self.num_classes))
+        pred = pred.reshape(
+            -1, self.num_grid, self.num_grid, (self.num_boxes * 5 + self.num_classes)
+        )
 
         loss = self.yolo_loss(pred, label_grid)
-        self.log('train_loss', loss)
+        self.log("train_loss", loss)
         return loss
 
-    def validation_step(self, batch, batch_idx) :
-        img_batch, label_grid = batch
+    def validation_step(self, batch, batch_idx):
+        img_batch, label_grid_batch = batch
         pred = self.forward(img_batch)
-        pred = pred.reshape(-1, self.num_grid, self.num_grid, (self.num_boxes * 5 + self.num_classes))
+        pred = pred.reshape(
+            -1, self.num_grid, self.num_grid, (self.num_boxes * 5 + self.num_classes)
+        )
 
         loss = self.yolo_loss(pred, label_grid)
-        self.log('val_loss', loss)
+        self.log("val_loss", loss)
 
-        for p,img in zip(pred, img_batch) :
-            bboxes = convert_prediction(p, num_bboxes = self.num_boxes, num_classes = self.num_classes)
-            bboxes_after_nms = nms(bboxes)
-            visualized_img = visualize(img, bboxes_after_nms)
-            plt.imsave('val_imgs/validation_img.jpg', visualized_img)
+        for p, img, label_grid in zip(pred, img_batch, label_grid_batch):
+            gt_bboxes = convert_labelgrid(
+                label_grid, num_bboxes=self.num_boxes, num_classes=self.num_classes
+            )
+            pred_bboxes = convert_labelgrid(
+                p, num_bboxes=self.num_boxes, num_classes=self.num_classes
+            )
+            pred_bboxes_after_nms = nms(pred_bboxes)
+            visualized_img = visualize(img, pred_bboxes_after_nms)
+            plt.imsave("val_imgs/validation_img.jpg", visualized_img)
             break
 
-        
+    def validation_epoch_end(self, outputs):
+        pass
 
+    def predict_step(self, batch, batch_idx):
+        pass
