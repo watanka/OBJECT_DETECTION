@@ -90,11 +90,10 @@ if __name__ == "__main__":
                          callbacks= [ckptCallback],
                          )
 
-    # trainer.fit(
-    #     model=model, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader,
-    #     # ckpt_path = 'epoch=6-step=30569.ckpt'
+    trainer.fit(
+        model=model, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader,
         
         
-    # )
+    )
 
     trainer.validate(model=model, dataloaders=val_dataloader, ckpt_path = 'last')

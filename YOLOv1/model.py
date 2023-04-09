@@ -88,6 +88,19 @@ class Yolov1(pl.LightningModule):
         )  # iou_thresholds = None is same as [0.5, 0.05, 0.95]
         # self.mAP = MeanAveragePrecisionMetrics(gts, preds, iou_threshold_range, confidence_threshold)
 
+        # self.apply(self._init_weights)
+
+    def _init_weights(self, module):
+        if isinstance(module, nn.Conv2d):
+            module.weight.data.normal_(mean=0.0, std=1.0)
+            if module.bias is not None:
+                module.bias.data.zero_()
+        if isinstance(module, nn.Linear):
+            torch.nn.init.xavier_uniform(module.weight)
+            module.bias.data.fill_(0.01)
+
+    
+
     def forward(self, x):
         x = self.darknet(x)
         return self.fcs(torch.flatten(x, start_dim=1))
@@ -175,7 +188,7 @@ class Yolov1(pl.LightningModule):
         if batch_idx % 100 == 0 :
 
             with torch.no_grad() :
-                bboxes_batches = [nms(convert_labelgrid(p, num_bboxes=self.num_boxes, num_classes=self.num_classes), threshold = 0.0, iou_threshold = 0.5) \
+                bboxes_batches = [nms(convert_labelgrid(p, num_bboxes=self.num_boxes, num_classes=self.num_classes), threshold = 0.0, iou_threshold = 0.8) \
                                     for p in pred]
 
                 bbox_visualization = []
