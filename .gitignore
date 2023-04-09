@@ -6,3 +6,4 @@ lightning_logs/
 .ipynb_checkpoints
 __pycache__
 */tensorboard_log/*
+*.ckpt
