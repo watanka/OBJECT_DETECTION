@@ -7,17 +7,20 @@ import torch
 import torch.nn as nn
 from torch import optim
 import pytorch_lightning as pl
+
+import torchvision
 import torchmetrics
 from torchmetrics.detection.mean_ap import MeanAveragePrecision
 
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 from loss import YOLOLoss
-from utils import convert_labelgrid
+from utils import convert_labelgrid, decode_labelgrid
 import sys
 
 sys.path.append("../")
-from global_utils import visualize
+from global_utils import visualize, nms
 
 """ 
 Information about architecture config:
@@ -168,7 +171,53 @@ class Yolov1(pl.LightningModule):
 
         loss = self.yolo_loss(pred, label_grid)
         self.log("train_loss", loss)
+
+        if batch_idx % 100 == 0 :
+
+            with torch.no_grad() :
+                bboxes_batches = [nms(convert_labelgrid(p, num_bboxes=self.num_boxes, num_classes=self.num_classes), threshold = 0.2, iou_threshold = 0.5) \
+                                    for p in pred]
+
+                bbox_visualization = []
+                for img, bboxes in zip(img_batch, bboxes_batches) :
+
+                    bbox_visualization.append(torch.tensor(visualize(img, bboxes)))
+
+                grid_result = torch.stack(bbox_visualization).permute(0,3,1,2)
+
+                grid = torchvision.utils.make_grid(grid_result)
+                self.logger.experiment.add_image("bbox visualization", grid, self.global_step)
+
+
         return loss
+
+    def get_predgt(self, pred_bboxes_batch, gt_bboxes_batch) :
+        '''
+        bboxes to torchmetrics input format
+        bboxes = [[cls, cx, cy, w, h, conf_score],...]
+        '''
+        pred_cls_batch, pred_coord_batch, pred_conf_batch = pred_bboxes_batch[..., 0:1], pred_bboxes_batch[..., 1:5], pred_bboxes_batch[..., 5:6]
+        
+        gt_cls_batch, gt_coord_batch = gt_bboxes_batch[..., 0:1], gt_bboxes_batch[..., 1:5]
+        
+        preds = [
+            dict(
+                boxes = pred_coord,
+                scores = pred_conf,
+                labels = pred_cls,
+                
+            ) for pred_cls, pred_coord, pred_conf in zip(pred_cls_batch, pred_coord_batch, pred_conf_batch)
+        ]
+
+        target = [
+            dict(
+                boxes = gt_coord,
+                labels = gt_cls,
+            ) for gt_cls, gt_coord in zip(gt_cls_batch, gt_coord_batch)
+        ]
+
+        return preds, target
+
 
     def validation_step(self, batch, batch_idx):
         img_batch, label_grid_batch = batch
@@ -177,23 +226,39 @@ class Yolov1(pl.LightningModule):
             -1, self.num_grid, self.num_grid, (self.num_boxes * 5 + self.num_classes)
         )
 
-        loss = self.yolo_loss(pred, label_grid)
+        loss = self.yolo_loss(pred, label_grid_batch)
         self.log("val_loss", loss)
 
-        for p, img, label_grid in zip(pred, img_batch, label_grid_batch):
-            gt_bboxes = convert_labelgrid(
-                label_grid, num_bboxes=self.num_boxes, num_classes=self.num_classes
-            )
-            pred_bboxes = convert_labelgrid(
-                p, num_bboxes=self.num_boxes, num_classes=self.num_classes
-            )
-            pred_bboxes_after_nms = nms(pred_bboxes)
-            visualized_img = visualize(img, pred_bboxes_after_nms)
-            plt.imsave("val_imgs/validation_img.jpg", visualized_img)
-            break
+        with torch.no_grad() :
+            pred_bboxes_batch = torch.tensor([nms(convert_labelgrid(p, num_bboxes=self.num_boxes, num_classes=self.num_classes), threshold = 0.2, iou_threshold = 0.5) \
+                                for p in pred])
 
-    def validation_epoch_end(self, outputs):
-        pass
+            bbox_visualization = []
+            for img, bboxes in zip(img_batch, pred_bboxes_batch) :
+
+                bbox_visualization.append(torch.tensor(visualize(img, bboxes)))
+
+            grid_result = torch.stack(bbox_visualization).permute(0,3,1,2)
+
+            grid = torchvision.utils.make_grid(grid_result)
+            self.logger.experiment.add_image("bbox visualization", grid, self.global_step)
+
+
+            gt_bboxes_batch = []
+            for label_grid in label_grid_batch :
+                gt_bboxes_batch.append(decode_labelgrid(label_grid, num_bboxes=self.num_boxes, num_classes=self.num_classes))
+            gt_bboxes_batch = torch.tensor(gt_bboxes_batch)
+
+            for pred_bboxes, gt_bboxes in tqdm(zip(pred_bboxes_batch, gt_bboxes_batch)) :
+                preds, target = self.get_predgt(pred_bboxes, gt_bboxes)
+                self.mAP.update(preds, target)
+        
+
+            self.log_dict(self.mAP.compute())
+
+
+    
+
 
     def predict_step(self, batch, batch_idx):
         pass

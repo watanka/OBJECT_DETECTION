@@ -11,6 +11,9 @@ import albumentations as A
 import albumentations.pytorch as pytorch
 
 import pytorch_lightning as pl
+from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
+from pytorch_lightning.loggers import TensorBoardLogger
+
 
 device = torch.device(
     "cuda"
@@ -29,7 +32,7 @@ train_data_transform = A.Compose(
         pytorch.transforms.ToTensorV2(),
     ],
     bbox_params=A.BboxParams(
-        format="pascal_voc", label_fields=["label"], min_visibility=0.8
+        format="pascal_voc", label_fields=["label"], min_visibility=0.8 # bounding box will be changed into yolo format after the encoding
     ),
 )
 
@@ -48,8 +51,6 @@ val_data_transform = A.Compose(
 
 ## TODO : organize configuration format
 # cfg =
-
-model_dict = dict(num_grid=7, num_boxes=2, num_classes=13)
 
 model = Yolov1(num_grid=7, num_boxes=2, num_classes=13).to(device)
 
@@ -72,14 +73,26 @@ val_dataset = BDDDataset(
 )
 
 
-train_dataloader = DataLoader(train_dataset)
+train_dataloader = DataLoader(train_dataset, batch_size= 16)
 val_dataloader = DataLoader(val_dataset)
 ## TODO : validation step
 
 
 if __name__ == "__main__":
+    
+    ## logger
+    tb_logger = TensorBoardLogger("tensorboard_log", name = 'yolov1')
 
-    trainer = pl.Trainer(max_epochs=100, accelerator="gpu")
+    ckptCallback = ModelCheckpoint(dirpath = '', save_top_k = 2, monitor = 'val_loss')
+    trainer = pl.Trainer(max_epochs=1, 
+                         accelerator="gpu", 
+                         logger = tb_logger,
+                         callbacks= [ckptCallback, EarlyStopping(monitor = 'val_loss')],
+                         
+                         )
+
     trainer.fit(
-        model=model, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader
+        model=model, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader,
+        
+        
     )
