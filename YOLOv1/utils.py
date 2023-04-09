@@ -49,3 +49,31 @@ def convert_labelgrid(label_grid, num_bboxes, num_classes):
             bboxes.append([pred_cls, x + x0, y + y0, w, h, confidence_score])
 
     return bboxes
+
+def decode_labelgrid(label_grid, num_bboxes, num_classes) :
+    '''For GT label conversion, separate from prediction conversion since gt label grid can have numBox true bboxes'''
+    num_grid, num_grid, seq_length = label_grid.shape
+
+    # get class index with highest probabilities
+    classlist_grid = label_grid[..., num_bboxes * 5 :]
+    max_probability_class_grid = torch.argmax(classlist_grid, -1)
+
+    # select coordinates and confidence scores with highest probability per grid cell
+    coords_grid = label_grid[..., : num_bboxes * 5]
+
+    ## convert ratio respect to the image size => add y0, x0 coordinates. (y0, x0) differ by grid cell.
+    gridsize = 1 / num_grid
+    bboxes = []
+    for j in range(num_grid):
+        for i in range(num_grid):
+            y0 = gridsize * j
+            x0 = gridsize * i
+            for b in range(num_bboxes) :
+                x, y, w, h, confidence_score = (
+                    coords_grid[j][i][b*5 : (b+1)*5].detach().cpu().numpy().tolist() # get each bbox from same grid
+                )
+                pred_cls = max_probability_class_grid[j][i].detach().cpu().numpy().tolist()
+
+                bboxes.append([pred_cls, x + x0, y + y0, w, h, confidence_score])
+
+    return bboxes
