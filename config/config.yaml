@@ -1,3 +1,5 @@
 
 defaults:
+  - model : yolov1
   - dataset : BDD
+  - schedule : yolov1

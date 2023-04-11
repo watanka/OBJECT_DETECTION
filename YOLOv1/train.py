@@ -1,6 +1,9 @@
+import hydra
+from omegaconf import DictConfig
+
 from ast import Num
 from model import Yolov1
-from data import BDDDataset
+from data import BDDDataset, BDDDataModule
 
 
 import torch
@@ -76,6 +79,14 @@ val_dataset = BDDDataset(
 train_dataloader = DataLoader(train_dataset, batch_size= 16, num_workers= 4)
 val_dataloader = DataLoader(val_dataset, batch_size = 16, num_workers= 4)
 ## TODO : validation step
+
+@hydra.main(config_path = 'config', config_name = 'config')
+def train(cfg : DictConfig) -> None :
+
+    train_dataloader = DataLoader(train_dataset, batch_size= 16, num_workers= 4)
+    val_dataloader = DataLoader(val_dataset, batch_size = 16, num_workers= 4)
+
+
 
 
 if __name__ == "__main__":
