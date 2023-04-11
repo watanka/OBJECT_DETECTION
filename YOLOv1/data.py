@@ -57,7 +57,7 @@ class BDDDataModule(pl.LightningDataModule) :
                                             self.num_grid, 
                                             self.num_classes, 
                                             self.numBox, 
-                                            is_train = False, transform = self.transform)
+                                            is_train = True, transform = self.transform)
         if stage == 'predict' :
             self.predict_dataset = BDDDataset(self.imgdir, 
                                             self.jsonfile, 

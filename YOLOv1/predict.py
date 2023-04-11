@@ -1,6 +1,6 @@
 from ast import Num
 from model import Yolov1
-from data import BDDDataset
+from data import BDDDataModule 
 
 
 import torch
@@ -12,7 +12,12 @@ import albumentations.pytorch as pytorch
 
 import pytorch_lightning as pl
 
-Trainer.test(model = ,
-             dataloaders = ,
+## TODO : config
+
+model = Yolov1(in_channels=3, num_grid, num_boxes, num_classes)
+datamodule = BDDDataModule(imgdir, jsonfile, num_grid, num_classes, numBox)
+
+bbox_result = Trainer.predict(model = model,
+             datamodule = datamodule,
              ckpt_path = 'best',
 )
