@@ -7,3 +7,5 @@ lightning_logs/
 __pycache__
 */tensorboard_log/*
 *.ckpt
+*.log
+outputs/
