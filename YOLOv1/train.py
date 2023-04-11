@@ -85,8 +85,13 @@ def train(cfg : DictConfig) -> None :
 
     train_dataloader = DataLoader(train_dataset, batch_size= 16, num_workers= 4)
     val_dataloader = DataLoader(val_dataset, batch_size = 16, num_workers= 4)
-
-
+    
+    datamodule = BDDDataModule(cfg.dataset.train.imgdir, 
+                                cfg.dataset.train.jsonfile, 
+                                cfg.model.num_grid, 
+                                cfg.model.num_classes, 
+                                cfg.model.numBox)
+    
 
 
 if __name__ == "__main__":
