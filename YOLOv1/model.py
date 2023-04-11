@@ -272,4 +272,18 @@ class Yolov1(pl.LightningModule):
 
 
     def predict_step(self, batch, batch_idx):
-        pass
+        pred = self.forward(batch)
+        pred = pred.reshape(
+            -1, self.num_grid, self.num_grid, (self.num_boxes * 5 + self.num_classes)
+        )
+
+        with torch.no_grad() :
+            bboxes_batches = [nms(convert_labelgrid(p, num_bboxes=self.num_boxes, num_classes=self.num_classes), threshold = 0.0, iou_threshold = 0.8) \
+                                for p in pred]
+
+            bbox_visualization = []
+            for img, bboxes in zip(img_batch, bboxes_batches) :
+
+                bbox_visualization.append(torch.tensor(visualize(img, bboxes)))
+        
+        return bbox_visualization
