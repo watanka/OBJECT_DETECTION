@@ -8,18 +8,18 @@ from global_utils import IoU
 
 
 class YOLOLoss(nn.Module):
-    def __init__(self, lambda_coord=5, lambda_noobj=0.5, num_grid=7, numBox=2):
+    def __init__(self, lambda_coord=5, lambda_noobj=0.5, num_grid=7, numbox=2):
         super().__init__()
 
         self.lambda_coord = lambda_coord
         self.lambda_noobj = lambda_noobj
         self.num_grid = num_grid
-        self.numBox = numBox
+        self.numbox = numbox
         self.MSEloss = nn.MSELoss(reduction="mean")
 
     def forward(self, output, target):
         """
-        for num_classes = 13, and numBox = 2,
+        for num_classes = 13, and numbox = 2,
         each grid cell contains
         [[x,y,w,h,pr(obj), x,y,w,h,pr(obj), 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,],]
 
@@ -31,22 +31,22 @@ class YOLOLoss(nn.Module):
         coordinate_loss = 0
         # class loss is considered per grid cell. We loop over gt boxes of the gridcells.
 
-        for gtbox_idx in range(self.numBox):
+        for gtbox_idx in range(self.numbox):
 
             gt_coords = target[..., gtbox_idx * 5 : (gtbox_idx + 1) * 5]
 
             identity_obj = gt_coords[..., -1:]  # to remain the last dimension
 
             total_pred_coords = output[
-                ..., : self.numBox * 5
+                ..., : self.numbox * 5
             ]  # batch_size, grid, grid, (x,y,w,h,pr(obj) )
 
-            # ious = torch.zeros((batch_size, self.num_grid, self.num_grid, self.numBox))
-            ious = torch.zeros_like(total_pred_coords[..., : self.numBox])
+            # ious = torch.zeros((batch_size, self.num_grid, self.num_grid, self.numbox))
+            ious = torch.zeros_like(total_pred_coords[..., : self.numbox])
 
             ## Box 갯수만큼 IoU를 계산
             for box_idx in range(
-                self.numBox
+                self.numbox
             ):  # select only one box with the highest IoU
                 pred_coords = total_pred_coords[..., box_idx * 5 : (box_idx + 1) * 5]
                 ious[..., box_idx : box_idx + 1] = IoU(pred_coords, gt_coords)
@@ -99,8 +99,8 @@ class YOLOLoss(nn.Module):
         # if any gt object exists, the first grid cell pr(object) = 1. We don't want to take account for no object box' class.
         obj_exists = target[..., 5:6]
         class_loss = self.MSEloss(
-            obj_exists * output[..., self.numBox * 5 :],
-            obj_exists * target[..., self.numBox * 5 :],
+            obj_exists * output[..., self.numbox * 5 :],
+            obj_exists * target[..., self.numbox * 5 :],
         )
 
         loss = (

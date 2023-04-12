@@ -71,14 +71,14 @@ class Yolov1(pl.LightningModule):
         self.fcs = self._create_fcs(**kwargs)
 
         self.num_grid = kwargs["num_grid"]
-        self.num_boxes = kwargs["num_boxes"]
+        self.numbox = kwargs["numbox"]
         self.num_classes = kwargs["num_classes"]
 
         self.yolo_loss = YOLOLoss(
             lambda_coord=5,
             lambda_noobj=0.5,
             num_grid=self.num_grid,
-            numBox=self.num_boxes,
+            numbox=self.numbox,
         )
 
         self.mAP = MeanAveragePrecision(
@@ -153,9 +153,9 @@ class Yolov1(pl.LightningModule):
 
         return nn.Sequential(*layers)
 
-    def _create_fcs(self, num_grid, num_boxes, num_classes):
+    def _create_fcs(self, num_grid, numbox, num_classes):
 
-        S, B, C = num_grid, num_boxes, num_classes
+        S, B, C = num_grid, numbox, num_classes
 
         # In original paper this should be
         # nn.Linear(1024*S*S, 4096),
@@ -179,7 +179,7 @@ class Yolov1(pl.LightningModule):
 
         pred = self.forward(img_batch)
         pred = pred.reshape(
-            -1, self.num_grid, self.num_grid, (self.num_boxes * 5 + self.num_classes)
+            -1, self.num_grid, self.num_grid, (self.numbox * 5 + self.num_classes)
         )
 
         loss = self.yolo_loss(pred, label_grid)
@@ -188,7 +188,7 @@ class Yolov1(pl.LightningModule):
         if batch_idx % 100 == 0 :
 
             with torch.no_grad() :
-                bboxes_batches = [nms(convert_labelgrid(p, num_bboxes=self.num_boxes, num_classes=self.num_classes), threshold = 0.0, iou_threshold = 0.8) \
+                bboxes_batches = [nms(convert_labelgrid(p, num_bboxes=self.numbox, num_classes=self.num_classes), threshold = 0.0, iou_threshold = 0.8) \
                                     for p in pred]
 
                 bbox_visualization = []
@@ -234,7 +234,7 @@ class Yolov1(pl.LightningModule):
         img_batch, label_grid_batch = batch
         pred = self.forward(img_batch)
         pred = pred.reshape(
-            -1, self.num_grid, self.num_grid, (self.num_boxes * 5 + self.num_classes)
+            -1, self.num_grid, self.num_grid, (self.numbox * 5 + self.num_classes)
         )
 
         loss = self.yolo_loss(pred, label_grid_batch)
@@ -274,11 +274,11 @@ class Yolov1(pl.LightningModule):
     def predict_step(self, batch, batch_idx):
         pred = self.forward(batch)
         pred = pred.reshape(
-            -1, self.num_grid, self.num_grid, (self.num_boxes * 5 + self.num_classes)
+            -1, self.num_grid, self.num_grid, (self.numbox * 5 + self.num_classes)
         )
 
         with torch.no_grad() :
-            bboxes_batches = [nms(convert_labelgrid(p, num_bboxes=self.num_boxes, num_classes=self.num_classes), threshold = 0.0, iou_threshold = 0.8) \
+            bboxes_batches = [nms(convert_labelgrid(p, num_bboxes=self.numbox, num_classes=self.num_classes), threshold = 0.0, iou_threshold = 0.8) \
                                 for p in pred]
 
             bbox_visualization = []

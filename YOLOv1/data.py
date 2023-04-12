@@ -34,13 +34,16 @@ label_dict = {num: clsname for clsname, num in classes_dict.items()}
 
 
 class BDDDataModule(pl.LightningDataModule) :
-    def __init__(self, imgdir, jsonfile, num_grid, num_classes, numBox, transform=None) :
+    def __init__(self, imgdir, jsonfile, num_grid, num_classes, numbox, batch_size, num_workers, transform=None) :
         super().__init__()
         self.imgdir = imgdir
         self.jsonfile = jsonfile
         self.num_grid = num_grid
         self.num_classes = num_classes
-        self.numBox = numBox
+        self.numbox = numbox
+
+        self.batch_size = batch_size
+        self.num_workers = num_workers
         self.transform = transform
 
     def setup(self, stage : str) :
@@ -49,36 +52,36 @@ class BDDDataModule(pl.LightningDataModule) :
                                             self.jsonfile, 
                                             self.num_grid, 
                                             self.num_classes, 
-                                            self.numBox, 
+                                            self.numbox, 
                                             is_train = True, transform = self.transform)
         if stage == 'test' :
             self.test_dataset = BDDDataset(self.imgdir, 
                                             self.jsonfile, 
                                             self.num_grid, 
                                             self.num_classes, 
-                                            self.numBox, 
+                                            self.numbox, 
                                             is_train = True, transform = self.transform)
         if stage == 'predict' :
             self.predict_dataset = BDDDataset(self.imgdir, 
                                             self.jsonfile, 
                                             self.num_grid, 
                                             self.num_classes, 
-                                            self.numBox, 
+                                            self.numbox, 
                                             is_train = False, transform = self.transform)
 
     def train_dataloader(self) :
-        return DataLoader(self.train_dataset, batch_size = self.batch_size)
+        return DataLoader(self.train_dataset, batch_size = self.batch_size, num_workers = self.num_workers)
     def val_dataloader(self) :
-        return DataLoader(self.train_dataset, batch_size = self.batch_size)
+        return DataLoader(self.train_dataset, batch_size = self.batch_size, num_workers = self.num_workers)
     def test_dataloader(self) :
-        return DataLoader(self.test_dataset, batch_size = self.batch_size)
+        return DataLoader(self.test_dataset, batch_size = self.batch_size, num_workers = self.num_workers)
     def predict_dataloader(self) :
-        return DataLoader(self.predict_dataset, batch_size = self.batch_size)
+        return DataLoader(self.predict_dataset, batch_size = self.batch_size, num_workers = self.num_workers)
 
 
 
 class BDDDataset(Dataset):
-    def __init__(self, imgdir, jsonfile, num_grid, num_classes, numBox, is_train = True, transform=None):
+    def __init__(self, imgdir, jsonfile, num_grid, num_classes, numbox, is_train = True, transform=None):
         super().__init__()
         self.imgdir = imgdir
         self.is_train = is_train
@@ -108,7 +111,7 @@ class BDDDataset(Dataset):
 
         self.num_grid = num_grid
         self.num_classes = num_classes
-        self.numBox = numBox
+        self.numbox = numbox
 
         self.transform = transform
 
@@ -171,7 +174,7 @@ class BDDDataset(Dataset):
 
     def encode(self, bboxes, labels, H, W):
         label_grid = np.zeros(
-            (self.num_grid, self.num_grid, self.numBox * 5 + self.num_classes),
+            (self.num_grid, self.num_grid, self.numbox * 5 + self.num_classes),
             np.float32,
         )
         grid_idxbox = np.zeros((self.num_grid, self.num_grid), np.uint8)
@@ -214,9 +217,9 @@ class BDDDataset(Dataset):
             elif (
                 label_box[grid_yidx][grid_xidx] == label
             ):  # label값이 이미 들어가있을 경우, 같은 클래스에 대한 값만 넣어준다.
-                label_grid[grid_yidx, grid_xidx, self.numBox * 5 + label] = 1.0
-                if boxnum < self.numBox:
-                    # 최대 self.numBox만큼만 넣는다.
+                label_grid[grid_yidx, grid_xidx, self.numbox * 5 + label] = 1.0
+                if boxnum < self.numbox:
+                    # 최대 self.numbox만큼만 넣는다.
                     # put into the grid
                     label_grid[grid_yidx, grid_xidx, boxnum * 5 : boxnum * 5 + 5] = [
                         normalized_x,

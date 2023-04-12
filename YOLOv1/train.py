@@ -82,34 +82,53 @@ val_dataloader = DataLoader(val_dataset, batch_size = 16, num_workers= 4)
 
 @hydra.main(config_path = 'config', config_name = 'config')
 def train(cfg : DictConfig) -> None :
-
-    train_dataloader = DataLoader(train_dataset, batch_size= 16, num_workers= 4)
-    val_dataloader = DataLoader(val_dataset, batch_size = 16, num_workers= 4)
-    
     datamodule = BDDDataModule(cfg.dataset.train.imgdir, 
                                 cfg.dataset.train.jsonfile, 
                                 cfg.model.num_grid, 
                                 cfg.model.num_classes, 
-                                cfg.model.numBox)
-    
+                                cfg.model.numbox,
+                                cfg.dataset.batch_size,
+                                cfg.dataset.num_workers,
+                                transform = 
+                                )
 
-
-if __name__ == "__main__":
+    model = Yolov1(num_grid= cfg.model.num_grid, numbox=cfg.model.numbox, num_classes=cfg.model.num_classes)            
     
     ## logger
     tb_logger = TensorBoardLogger("tensorboard_log", name = 'yolov1')
-
-    ckptCallback = ModelCheckpoint(dirpath = '', save_top_k = 2, monitor = 'val_loss')
-    trainer = pl.Trainer(max_epochs=50, 
+    
+    ckptCallback = ModelCheckpoint(dirpath = tb_logger.save_dir, 
+                                   filename = cfg.schedule.savefile_format,
+                                   save_top_k = 2, 
+                                   monitor = 'val_loss')
+    trainer = pl.Trainer(max_epochs= cfg.schedule.max_epochs, 
                          accelerator="gpu", 
                          logger = tb_logger,
                          callbacks= [ckptCallback],
                          )
 
     trainer.fit(
-        model=model, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader,
-        
-        
-    )
+        model=model, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader,)
 
-    trainer.validate(model=model, dataloaders=val_dataloader, ckpt_path = 'last')
+if __name__ == "__main__":
+    train()    
+    # ## logger
+    # tb_logger = TensorBoardLogger("tensorboard_log", name = 'yolov1')
+    
+    # ckptCallback = ModelCheckpoint(dirpath = tb_logger.save_dir, 
+    #                                filename = 'ep{epoch:02d}-val_loss{val_loss:.2f}'
+    #                                save_top_k = 2, 
+    #                                monitor = 'val_loss')
+    # trainer = pl.Trainer(max_epochs=50, 
+    #                      accelerator="gpu", 
+    #                      logger = tb_logger,
+    #                      callbacks= [ckptCallback],
+    #                      )
+
+    # trainer.fit(
+    #     model=model, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader,
+        
+        
+    # )
+
+    # trainer.validate(model=model, dataloaders=val_dataloader, ckpt_path = 'last')
