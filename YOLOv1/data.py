@@ -190,8 +190,8 @@ class BDDDataset(Dataset):
 
             x1, y1, x2, y2 = bbox
 
-            w = x2 - x1
-            h = y2 - y1
+            w = (x2 - x1) / W
+            h = (y2 - y1) / H
             x_center = (x1 + w / 2) / W
             y_center = (y1 + h / 2) / H
 
