@@ -1,5 +1,6 @@
 import hydra
 from omegaconf import DictConfig
+import os
 
 from ast import Num
 from model import Yolov1
@@ -44,7 +45,6 @@ def train(cfg : DictConfig) -> None :
     ),
 )
 
-    ## TODO : data_transform for inference
     test_transform = A.Compose(
         [
             A.geometric.resize.LongestMaxSize(max_size=cfg.model.img_size),
@@ -80,8 +80,8 @@ def train(cfg : DictConfig) -> None :
     model = Yolov1(num_grid= cfg.model.num_grid, numbox=cfg.model.numbox, num_classes=cfg.model.num_classes)            
     
     ## logger
-    tb_logger = TensorBoardLogger(save_dir = "tensorboard/", name = 'yolov1', version = '0')
-    print(f'Model weight will be saved with tensorboard logger {tb_logger.save_dir}.')
+    tb_logger = TensorBoardLogger(save_dir = os.path.join(os.getcwd(), 'tensorboard/') , name = 'yolov1')
+    # print(f'Model weight will be saved with tensorboard logger {tb_logger.save_dir}.')
     ckptCallback = ModelCheckpoint(dirpath = tb_logger.save_dir, 
                                    filename = cfg.schedule.savefile_format,
                                    save_top_k = 2, 
