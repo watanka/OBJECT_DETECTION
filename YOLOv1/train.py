@@ -26,12 +26,17 @@ device = torch.device(
     else "cpu"
 )
 
-train_data_transform = A.Compose(
+
+@hydra.main(config_path = '../config', config_name = 'config')
+def train(cfg : DictConfig) -> None :
+    train_transform = A.Compose(
     [
-        A.geometric.resize.SmallestMaxSize(max_size=446),
-        # A.RandomCrop(width = 446, height = 446),
-        A.RandomCrop(width=446, height=446, always_apply=True, p=1.0),
-        A.PadIfNeeded(min_width=446, min_height=446, border_mode=None),
+        A.geometric.resize.RandomScale(scale_limit=cfg.aug.scale_limit),
+        A.geometric.transforms.Affine(translate_percent = [cfg.aug.translation, cfg.aug.translation]), 
+        A.geometric.resize.SmallestMaxSize(max_size=cfg.model.img_size),
+        A.transforms.ColorJitter(brightness = cfg.aug.brightness, saturation = cfg.aug.saturation), 
+        A.RandomCrop(width=cfg.model.img_size, height=cfg.model.img_size, always_apply=True, p=1.0),
+        A.PadIfNeeded(min_width=cfg.model.img_size, min_height=cfg.model.img_size, border_mode=None),
         pytorch.transforms.ToTensorV2(),
     ],
     bbox_params=A.BboxParams(
@@ -39,49 +44,27 @@ train_data_transform = A.Compose(
     ),
 )
 
-## TODO : data_transform for inference
-val_data_transform = A.Compose(
-    [
-        A.geometric.resize.LongestMaxSize(max_size=446),
-        A.PadIfNeeded(min_width=446, min_height=446, border_mode=None),
-        pytorch.transforms.ToTensorV2(),
-    ],
-    bbox_params=A.BboxParams(
-        format="pascal_voc", label_fields=["label"], min_visibility=0.8
-    ),
-)
+    ## TODO : data_transform for inference
+    test_transform = A.Compose(
+        [
+            A.geometric.resize.LongestMaxSize(max_size=cfg.model.img_size),
+            A.PadIfNeeded(min_width=cfg.model.img_size, min_height=cfg.model.img_size, border_mode=None),
+            pytorch.transforms.ToTensorV2(),
+        ],
+        bbox_params=A.BboxParams(
+            format="pascal_voc", label_fields=["label"], min_visibility=0.8
+        ),
+    )
+
+    predict_transform = A.Compose(
+            [
+            A.geometric.resize.LongestMaxSize(max_size=cfg.model.img_size),
+            A.PadIfNeeded(min_width=cfg.model.img_size, min_height=cfg.model.img_size, border_mode=None),
+            pytorch.transforms.ToTensorV2(),
+        ],
+    )
 
 
-## TODO : organize configuration format
-# cfg =
-
-model = Yolov1(num_grid=7, num_boxes=2, num_classes=13).to(device)
-
-train_dataset = BDDDataset(
-    imgdir="../data/images/train",
-    jsonfile="../data/label/det_train.json",
-    num_grid=7,
-    num_classes=13,
-    numBox=2,
-    transform=train_data_transform,
-)
-
-val_dataset = BDDDataset(
-    imgdir="../data/images/val",
-    jsonfile="../data/label/det_val.json",
-    num_grid=7,
-    num_classes=13,
-    numBox=2,
-    transform=val_data_transform,
-)
-
-
-train_dataloader = DataLoader(train_dataset, batch_size= 16, num_workers= 4)
-val_dataloader = DataLoader(val_dataset, batch_size = 16, num_workers= 4)
-## TODO : validation step
-
-@hydra.main(config_path = 'config', config_name = 'config')
-def train(cfg : DictConfig) -> None :
     datamodule = BDDDataModule(cfg.dataset.train.imgdir, 
                                 cfg.dataset.train.jsonfile, 
                                 cfg.model.num_grid, 
@@ -89,14 +72,16 @@ def train(cfg : DictConfig) -> None :
                                 cfg.model.numbox,
                                 cfg.dataset.batch_size,
                                 cfg.dataset.num_workers,
-                                transform = 
+                                train_transform = train_transform,
+                                test_transform = test_transform,
+                                predict_transform = predict_transform
                                 )
 
     model = Yolov1(num_grid= cfg.model.num_grid, numbox=cfg.model.numbox, num_classes=cfg.model.num_classes)            
     
     ## logger
-    tb_logger = TensorBoardLogger("tensorboard_log", name = 'yolov1')
-    
+    tb_logger = TensorBoardLogger(save_dir = "tensorboard/", name = 'yolov1', version = '0')
+    print(f'Model weight will be saved with tensorboard logger {tb_logger.save_dir}.')
     ckptCallback = ModelCheckpoint(dirpath = tb_logger.save_dir, 
                                    filename = cfg.schedule.savefile_format,
                                    save_top_k = 2, 
@@ -108,7 +93,7 @@ def train(cfg : DictConfig) -> None :
                          )
 
     trainer.fit(
-        model=model, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader,)
+        model=model, datamodule= datamodule)
 
 if __name__ == "__main__":
     train()    

@@ -34,7 +34,11 @@ label_dict = {num: clsname for clsname, num in classes_dict.items()}
 
 
 class BDDDataModule(pl.LightningDataModule) :
-    def __init__(self, imgdir, jsonfile, num_grid, num_classes, numbox, batch_size, num_workers, transform=None) :
+    def __init__(self, imgdir, jsonfile, num_grid, num_classes, numbox, batch_size, num_workers, 
+                 train_transform = None,
+                 test_transform = None,
+                 predict_transform = None
+                 ) :
         super().__init__()
         self.imgdir = imgdir
         self.jsonfile = jsonfile
@@ -44,7 +48,9 @@ class BDDDataModule(pl.LightningDataModule) :
 
         self.batch_size = batch_size
         self.num_workers = num_workers
-        self.transform = transform
+        self.train_transform = train_transform
+        self.test_transform = test_transform
+        self.predict_transform = predict_transform
 
     def setup(self, stage : str) :
         if stage == 'fit' :
@@ -53,21 +59,21 @@ class BDDDataModule(pl.LightningDataModule) :
                                             self.num_grid, 
                                             self.num_classes, 
                                             self.numbox, 
-                                            is_train = True, transform = self.transform)
+                                            is_train = True, transform = self.train_transform)
         if stage == 'test' :
             self.test_dataset = BDDDataset(self.imgdir, 
                                             self.jsonfile, 
                                             self.num_grid, 
                                             self.num_classes, 
                                             self.numbox, 
-                                            is_train = True, transform = self.transform)
+                                            is_train = True, transform = self.test_transform)
         if stage == 'predict' :
             self.predict_dataset = BDDDataset(self.imgdir, 
                                             self.jsonfile, 
                                             self.num_grid, 
                                             self.num_classes, 
                                             self.numbox, 
-                                            is_train = False, transform = self.transform)
+                                            is_train = False, transform = self.predict_transform)
 
     def train_dataloader(self) :
         return DataLoader(self.train_dataset, batch_size = self.batch_size, num_workers = self.num_workers)
@@ -117,7 +123,7 @@ class BDDDataset(Dataset):
 
     def __getitem__(self, idx):
         imgfile = self.imgfiles[idx]
-        image = plt.imread(imgfile) / 255.0
+        image = plt.imread(imgfile) #/ 255.0
 
         if self.is_train :
             json_info = self.json_infos[idx]
@@ -158,9 +164,7 @@ class BDDDataset(Dataset):
             H, W = image.shape[1:]
             label_grid = self.encode(bboxes, labels, H, W)
 
-            return torch.tensor(image, dtype=torch.float32), torch.tensor(
-                label_grid, dtype=torch.float32
-            )
+            return image.float(), label_grid
 
         else :
             if self.transform:
@@ -230,4 +234,4 @@ class BDDDataset(Dataset):
                     ]
                     grid_idxbox[grid_yidx][grid_xidx] += 1
 
-        return label_grid
+        return np.float32(label_grid)
