@@ -28,4 +28,6 @@ yoloV1부터 yoloV8까지 직접 구현합니다. 이미 웹에 pytorch로 구�
 
 #### Dataset
 Berkeley DeepDrive Dataset  
-link : https://bdd-data.berkeley.edu/
+- link : https://bdd-data.berkeley.edu/  
+- pascal_voc 형태, [x1,y1,x2,y2]를 인풋으로 받습니다. albumentations에서 yolo format을 처리할 시에 생기는 에러 때문.  
+- [objectness, x, y, w, h, classes].

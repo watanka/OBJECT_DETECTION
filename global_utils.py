@@ -70,7 +70,7 @@ def visualize_bbox(img, bbox, color=BOX_COLOR, thickness=1):
     """
     img_h, img_w = img.shape[:2]
 
-    pred_cls, x, y, w, h, confidence_score = bbox
+    confidence_score, x, y, w, h, pred_cls = bbox
     
     x_min, x_max, y_min, y_max = x - w/2, x + w/2, y - h/2, y + h/2
     x_min = int(img_w * x_min)
@@ -108,12 +108,12 @@ def visualize(img, bboxes):
     return img
 
 def visualize_gridbbox(img, label_grid, numBox = 2, color = BOX_COLOR, thickness = 1) :
-    H, W = img.shape[:2]
-    
     if type(img) == torch.Tensor :
         copy_img = img.permute(1,2,0).detach().cpu().numpy().copy()
+        H, W = copy_img.shape[:2]
     else :
         copy_img = img.copy()
+        H, W = copy_img.shape[:2]
     assert H == W, 'image size should be same.'
     num_grid, _, info_length = label_grid.shape
 
@@ -125,7 +125,7 @@ def visualize_gridbbox(img, label_grid, numBox = 2, color = BOX_COLOR, thickness
             for box_idx in range(numBox) : 
 
                 x0, y0 = xidx, yidx
-                x_center, y_center, w, h = label_grid[yidx, xidx, box_idx * 5 : box_idx * 5 + 4]
+                x_center, y_center, w, h = label_grid[yidx, xidx, box_idx * 5 + 1 : (box_idx+1) * 5]
                 x_center = int((x_center + x0) * gridsize)
                 y_center = int((y_center + y0) * gridsize)
 

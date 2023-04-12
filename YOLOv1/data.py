@@ -164,7 +164,7 @@ class BDDDataset(Dataset):
             H, W = image.shape[1:]
             label_grid = self.encode(bboxes, labels, H, W)
 
-            return image.float(), label_grid, bboxes, labels
+            return image.float(), label_grid
 
         else :
             if self.transform:

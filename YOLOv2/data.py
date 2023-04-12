@@ -146,12 +146,6 @@ class BDDDataset(Dataset):
                 x2, y2 = coord["x2"], coord["y2"]
                 label = classes_dict[label]
 
-                # bbox_albu = A.core.bbox_utils.convert_bbox_from_albumentations(np.array([x1, y1, x2, y2, label]), target_format='yolo', rows=HEIGHT, cols=WIDTH, check_validity= False)
-                # print('bbox_albu : ', np.array(bbox_albu))
-                # bbox_yolo = A.core.bbox_utils.convert_bbox_from_albumentations(np.array(bbox_albu), target_format='yolo', rows=HEIGHT, cols=WIDTH, check_validity=False)
-                # print('bbox_yolo : ', bbox_yolo)
-
-                # bboxes.append([x,y,w,h])
                 bboxes.append([x1, y1, x2, y2])
                 labels.append(label)
 
@@ -182,16 +176,21 @@ class BDDDataset(Dataset):
             (self.num_grid, self.num_grid, len(self.anchorbox) * (5 + self.num_classes) ),
             np.float32,
         )
+        
         grid_idxbox = np.zeros((self.num_grid, self.num_grid), np.uint8)
 
         for bbox, label in zip(bboxes, labels):
 
             x1, y1, x2, y2 = bbox
+            label = int(label)
             # convert pascal_voc to yolo format
-            w = (x2 - x1) / W
-            h = (y2 - y1) / H
+            w = (x2 - x1)
+            h = (y2 - y1)
             x_center = (x1 + w / 2) / W
             y_center = (y1 + h / 2) / H
+
+            w /= W
+            h /= H
 
             assert H == W, f"yolov2 takes only square image size. H = {H}, W = {W}"
             gridsize = 1 / self.num_grid
@@ -206,9 +205,8 @@ class BDDDataset(Dataset):
 
             boxnum = grid_idxbox[grid_yidx][grid_xidx]
             if boxnum < len(self.anchorbox) : # if total number of boxes exceeds len(anchorbox), then ignore.
-                label_grid[grid_yidx, grid_xidx, boxnum * 5 : (boxnum + 1) * 5 ] = [normalized_x, normalized_y, 
-                                                                                    w, h, 1]
-                label_grid[grid_yidx, grid_xidx, (boxnum + 1) * 5 : (boxnum + 1) * 5 + label] = 1
+                label_grid[grid_yidx, grid_xidx, boxnum * ( 5 + self.num_classes ) : boxnum * ( 5 + self.num_classes ) + 5 ] = [1, normalized_x, normalized_y, w, h]
+                label_grid[grid_yidx, grid_xidx, boxnum * ( 5 + self.num_classes ) + label] = 1
 
                 grid_idxbox[grid_yidx][grid_xidx] += 1
             

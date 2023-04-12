@@ -31,13 +31,13 @@ device = torch.device(
 @hydra.main(config_path = '../config', config_name = 'config')
 def train(cfg : DictConfig) -> None :
     train_transform = A.Compose(
-    [
+    [   A.Normalize(), # mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)
         A.geometric.resize.RandomScale(scale_limit=cfg.aug.scale_limit),
         A.geometric.transforms.Affine(translate_percent = [cfg.aug.translation, cfg.aug.translation]), 
         A.geometric.resize.SmallestMaxSize(max_size=cfg.model.img_size),
         A.transforms.ColorJitter(brightness = cfg.aug.brightness, saturation = cfg.aug.saturation), 
         A.RandomCrop(width=cfg.model.img_size, height=cfg.model.img_size, always_apply=True, p=1.0),
-        A.PadIfNeeded(min_width=cfg.model.img_size, min_height=cfg.model.img_size, border_mode=None),
+        A.PadIfNeeded(min_width=cfg.model.img_size, min_height=cfg.model.img_size, border_mode=None), 
         pytorch.transforms.ToTensorV2(),
     ],
     bbox_params=A.BboxParams(
@@ -49,6 +49,7 @@ def train(cfg : DictConfig) -> None :
         [
             A.geometric.resize.LongestMaxSize(max_size=cfg.model.img_size),
             A.PadIfNeeded(min_width=cfg.model.img_size, min_height=cfg.model.img_size, border_mode=None),
+            A.Normalize(),
             pytorch.transforms.ToTensorV2(),
         ],
         bbox_params=A.BboxParams(
@@ -60,6 +61,7 @@ def train(cfg : DictConfig) -> None :
             [
             A.geometric.resize.LongestMaxSize(max_size=cfg.model.img_size),
             A.PadIfNeeded(min_width=cfg.model.img_size, min_height=cfg.model.img_size, border_mode=None),
+            A.Normalize(),
             pytorch.transforms.ToTensorV2(),
         ],
     )
