@@ -123,7 +123,7 @@ class BDDDataset(Dataset):
 
     def __getitem__(self, idx):
         imgfile = self.imgfiles[idx]
-        image = plt.imread(imgfile) #/ 255.0
+        image = cv2.imread(imgfile) #/ 255.0
 
         if self.is_train :
             json_info = self.json_infos[idx]
@@ -164,7 +164,7 @@ class BDDDataset(Dataset):
             H, W = image.shape[1:]
             label_grid = self.encode(bboxes, labels, H, W)
 
-            return image.float(), label_grid
+            return image.float(), label_grid, bboxes, labels
 
         else :
             if self.transform:
@@ -179,21 +179,23 @@ class BDDDataset(Dataset):
     def encode(self, bboxes, labels, H, W):
         label_grid = np.zeros(
             (self.num_grid, self.num_grid, self.numbox * 5 + self.num_classes),
-            np.float32,
+            np.float64,
         )
         grid_idxbox = np.zeros((self.num_grid, self.num_grid), np.uint8)
-        label_box = np.full_like(
-            grid_idxbox, -1
-        )  # grid cell당 하나의 class만 포함할 수 있다. 이미 grid안에 label값이 들어가있다면, continue.
+        # grid cell당 하나의 class만 포함할 수 있다. 이미 grid안에 label값이 들어가있다면, continue.
+        label_box = np.full((self.num_grid, self.num_grid), -1)  
 
         for bbox, label in zip(bboxes, labels):
 
             x1, y1, x2, y2 = bbox
-
-            w = (x2 - x1) / W
-            h = (y2 - y1) / H
+            label = int(label)
+            w = (x2 - x1)
+            h = (y2 - y1)
             x_center = (x1 + w / 2) / W
             y_center = (y1 + h / 2) / H
+
+            w /= W
+            h /= H
 
             assert H == W, f"yolov1 takes only square image size. H = {H}, W = {W}"
             gridsize = 1 / self.num_grid
@@ -217,20 +219,32 @@ class BDDDataset(Dataset):
                 label_box[grid_yidx][grid_xidx] == -1
             ):  # grid cell에 아무런 값이 들어가지 않은 경우, label을 넣어준다.
                 label_box[grid_yidx][grid_xidx] = label
-
-            elif (
-                label_box[grid_yidx][grid_xidx] == label
-            ):  # label값이 이미 들어가있을 경우, 같은 클래스에 대한 값만 넣어준다.
-                label_grid[grid_yidx, grid_xidx, self.numbox * 5 + label] = 1.0
+                label_grid[grid_yidx, grid_xidx, self.numbox * 5 + label] = 1
                 if boxnum < self.numbox:
                     # 최대 self.numbox만큼만 넣는다.
                     # put into the grid
                     label_grid[grid_yidx, grid_xidx, boxnum * 5 : boxnum * 5 + 5] = [
+                        1,
                         normalized_x,
                         normalized_y,
                         w,
                         h,
+                    ]
+                    grid_idxbox[grid_yidx][grid_xidx] += 1
+
+            elif (
+                label_box[grid_yidx][grid_xidx] == label
+            ):  # label값이 이미 들어가있을 경우, 같은 클래스에 대한 값만 넣어준다.
+                label_grid[grid_yidx, grid_xidx, self.numbox * 5 + label] = 1
+                if boxnum < self.numbox:
+                    # 최대 self.numbox만큼만 넣는다.
+                    # put into the grid
+                    label_grid[grid_yidx, grid_xidx, boxnum * 5 : boxnum * 5 + 5] = [
                         1,
+                        normalized_x,
+                        normalized_y,
+                        w,
+                        h,
                     ]
                     grid_idxbox[grid_yidx][grid_xidx] += 1
 
