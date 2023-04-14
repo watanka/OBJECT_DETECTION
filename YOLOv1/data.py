@@ -34,42 +34,52 @@ label_dict = {num: clsname for clsname, num in classes_dict.items()}
 
 
 class BDDDataModule(pl.LightningDataModule) :
-    def __init__(self, imgdir, jsonfile, num_grid, num_classes, numbox, batch_size, num_workers, 
+    def __init__(self, 
+                 cfg, 
                  train_transform = None,
                  test_transform = None,
                  predict_transform = None
                  ) :
         super().__init__()
-        self.imgdir = imgdir
-        self.jsonfile = jsonfile
-        self.num_grid = num_grid
-        self.num_classes = num_classes
-        self.numbox = numbox
+        self.cfg = cfg
 
-        self.batch_size = batch_size
-        self.num_workers = num_workers
+        self.train_imgdir = cfg.dataset.train.imgdir
+        self.train_jsonfile = cfg.dataset.train.jsonfile
+
+        self.test_imgdir = cfg.dataset.test.imgdir
+        self.test_jsonfile = cfg.dataset.test.jsonfile
+
+        self.predict_imgdir = cfg.dataset.predict.imgdir
+        self.predict_jsonfile = cfg.dataset.predict.jsonfile
+
+        self.num_grid = cfg.model.num_grid
+        self.num_classes = cfg.model.num_classes
+        self.numbox = cfg.model.numbox
+
+        self.batch_size = cfg.dataset.batch_size
+        self.num_workers = cfg.dataset.num_workers
         self.train_transform = train_transform
         self.test_transform = test_transform
         self.predict_transform = predict_transform
 
     def setup(self, stage : str) :
         if stage == 'fit' :
-            self.train_dataset = BDDDataset(self.imgdir, 
-                                            self.jsonfile, 
+            self.train_dataset = BDDDataset(self.train_imgdir, 
+                                            self.train_jsonfile, 
                                             self.num_grid, 
                                             self.num_classes, 
                                             self.numbox, 
                                             is_train = True, transform = self.train_transform)
-        if stage == 'test' :
-            self.test_dataset = BDDDataset(self.imgdir, 
-                                            self.jsonfile, 
+        if stage == 'validate' or stage == 'test' :
+            self.test_dataset = BDDDataset(self.test_imgdir, 
+                                            self.test_jsonfile, 
                                             self.num_grid, 
                                             self.num_classes, 
                                             self.numbox, 
                                             is_train = True, transform = self.test_transform)
         if stage == 'predict' :
-            self.predict_dataset = BDDDataset(self.imgdir, 
-                                            self.jsonfile, 
+            self.predict_dataset = BDDDataset(self.predict_imgdir, 
+                                            self.predict_jsonfile, 
                                             self.num_grid, 
                                             self.num_classes, 
                                             self.numbox, 
@@ -78,7 +88,7 @@ class BDDDataModule(pl.LightningDataModule) :
     def train_dataloader(self) :
         return DataLoader(self.train_dataset, batch_size = self.batch_size, num_workers = self.num_workers)
     def val_dataloader(self) :
-        return DataLoader(self.train_dataset, batch_size = self.batch_size, num_workers = self.num_workers)
+        return DataLoader(self.test_dataset, batch_size = self.batch_size, num_workers = self.num_workers)
     def test_dataloader(self) :
         return DataLoader(self.test_dataset, batch_size = self.batch_size, num_workers = self.num_workers)
     def predict_dataloader(self) :
@@ -98,7 +108,7 @@ class BDDDataset(Dataset):
             self.json_infos = sorted(json_infos, key=lambda x: x["name"])
 
             self.imgfiles = []
-            for info in json_infos:
+            for info in self.json_infos:
                 self.imgfiles.append(os.path.join(self.imgdir, info["name"]))
 
             ## make sure json information and imgfile are matched

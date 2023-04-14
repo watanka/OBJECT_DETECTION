@@ -88,17 +88,6 @@ class Yolov1(pl.LightningModule):
         )  # iou_thresholds = None is same as [0.5, 0.05, 0.95]
         # self.mAP = MeanAveragePrecisionMetrics(gts, preds, iou_threshold_range, confidence_threshold)
 
-        # self.apply(self._init_weights)
-
-    def _init_weights(self, module):
-        if isinstance(module, nn.Conv2d):
-            module.weight.data.normal_(mean=0.0, std=1.0)
-            if module.bias is not None:
-                module.bias.data.zero_()
-        if isinstance(module, nn.Linear):
-            torch.nn.init.xavier_uniform(module.weight)
-            module.bias.data.fill_(0.01)
-
     
 
     def forward(self, x):
@@ -231,42 +220,44 @@ class Yolov1(pl.LightningModule):
 
 
     def validation_step(self, batch, batch_idx):
-        img_batch, label_grid_batch = batch
-        pred = self.forward(img_batch)
-        pred = pred.reshape(
-            -1, self.num_grid, self.num_grid, (self.numbox * 5 + self.num_classes)
-        )
+        ### 100번마다 한 번씩만 validation 스코어 업데이트
+        if batch_idx % 100 == 0 :
+            img_batch, label_grid_batch = batch
+            pred = self.forward(img_batch)
+            pred = pred.reshape(
+                -1, self.num_grid, self.num_grid, (self.numbox * 5 + self.num_classes)
+            )
 
-        loss = self.yolo_loss(pred, label_grid_batch)
-        self.log("val_loss", loss)
+            loss = self.yolo_loss(pred, label_grid_batch)
+            self.log("val_loss", loss)
 
-        with torch.no_grad() :
-            pred_bboxes_batch = torch.tensor([nms(convert_labelgrid(p, numbox=self.numbox, num_classes=self.num_classes), threshold = 0.0, iou_threshold = 0.5) \
-                                for p in pred])
+            with torch.no_grad() :
+                pred_bboxes_batch = torch.tensor([nms(convert_labelgrid(p, numbox=self.numbox, num_classes=self.num_classes), threshold = 0.0, iou_threshold = 0.5) \
+                                    for p in pred])
 
-            # bbox_visualization = []
-            # for img, bboxes in zip(img_batch.detach().cpu().numpy(), pred_bboxes_batch.detach().cpu().numpy()) :
+                bbox_visualization = []
+                for img, bboxes in zip(img_batch.detach(), pred_bboxes_batch.detach().cpu().numpy()) :
 
-            #     bbox_visualization.append(torch.tensor(visualize(img, bboxes)))
+                    bbox_visualization.append(torch.tensor(visualize(img, bboxes)))
 
-            # grid_result = torch.stack(bbox_visualization).permute(0,3,1,2)
+                grid_result = torch.stack(bbox_visualization).permute(0,3,1,2)
 
-            # grid = torchvision.utils.make_grid(grid_result)
-            # self.logger.experiment.add_image("bbox visualization", grid, self.global_step)
+                grid = torchvision.utils.make_grid(grid_result)
+                self.logger.experiment.add_image("bbox visualization", grid, self.global_step)
 
 
-            gt_bboxes_batch = []
-            for label_grid in label_grid_batch :
-                gt_bboxes_batch.append(decode_labelgrid(label_grid, numbox=self.numbox, num_classes=self.num_classes))
-            gt_bboxes_batch = torch.tensor(gt_bboxes_batch)
+                gt_bboxes_batch = []
+                for label_grid in label_grid_batch :
+                    gt_bboxes_batch.append(decode_labelgrid(label_grid, numbox=self.numbox, num_classes=self.num_classes))
+                gt_bboxes_batch = torch.tensor(gt_bboxes_batch)
 
-            for pred_bboxes, gt_bboxes in tqdm(zip(pred_bboxes_batch, gt_bboxes_batch)) :
-                preds, target = self.get_predgt(pred_bboxes, gt_bboxes)
-                self.mAP.update(preds = preds, target = target)
+                for pred_bboxes, gt_bboxes in tqdm(zip(pred_bboxes_batch, gt_bboxes_batch)) :
+                    preds, target = self.get_predgt(pred_bboxes, gt_bboxes)
+                    self.mAP.update(preds = preds, target = target)
     
-
-            self.log_dict(self.mAP.compute())
-
+    def on_validation_epoch_end(self):
+        self.log_dict(self.mAP.compute())
+        self.mAP.reset()
 
     
 
@@ -282,8 +273,8 @@ class Yolov1(pl.LightningModule):
                                 for p in pred]
 
             bbox_visualization = []
-            for img, bboxes in zip(img_batch, bboxes_batches) :
+            for img, bboxes in zip(batch, bboxes_batches) :
 
                 bbox_visualization.append(torch.tensor(visualize(img, bboxes)))
         
-        return bbox_visualization
+        return bboxes_batches, bbox_visualization

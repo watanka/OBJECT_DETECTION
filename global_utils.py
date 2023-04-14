@@ -32,23 +32,25 @@ def IoU(pred, gt) :
     gt_x2 = gt_x_center + gt_w / 2
     gt_y2 = gt_y_center + gt_h / 2
 
-    # if type(pred_x1) == torch.tensor and type(pred_x1) == torch.tensor and type(pred_x1) == torch.tensor and type(pred_x1) == torch.tensor : 
+    if type(pred_x1) == torch.tensor: 
 
-    x1 = torch.max(pred_x1, gt_x1)
-    y1 = torch.max(pred_y1, gt_y1)
+        x1 = torch.max(pred_x1, gt_x1)
+        y1 = torch.max(pred_y1, gt_y1)
 
-    x2 = torch.min(pred_x2, gt_x2)
-    y2 = torch.min(pred_y2, gt_y2)
+        x2 = torch.min(pred_x2, gt_x2)
+        y2 = torch.min(pred_y2, gt_y2)
 
-    # elif type(pred_x1) == np.array and type(pred_x2) == np.array and type(pred_y1) == np.array and type(pred_y2) == np.array :
+        intersection = (x2 - x1).clamp(0) * (y2 - y1).clamp(0)
+    elif type(pred_x1) == np.array :
 
-    #     x1 = np.max(pred_x1, gt_x1)
-    #     y1 = np.max(pred_y1, gt_y1)
+        x1 = np.max(pred_x1, gt_x1)
+        y1 = np.max(pred_y1, gt_y1)
 
-    #     x2 = np.min(pred_x2, gt_x2)
-    #     y2 = np.min(pred_y2, gt_y2)
+        x2 = np.min(pred_x2, gt_x2)
+        y2 = np.min(pred_y2, gt_y2)
 
-    intersection = (x2 - x1).clamp(0) * (y2 - y1).clamp(0)
+        intersection = np.minimum((x2 - x1), 0) * np.minimum((y2 - y1), 0)
+    
     total_area = ((pred_x2 - pred_x1) * (pred_y2 - pred_y1)) + ((gt_x2 - gt_x1) * (gt_y2 - gt_y1))
 
     return intersection / (total_area - intersection + 1e-6) # add buffer
@@ -99,6 +101,10 @@ def visualize(img, bboxes):
         img = np.array(img*255., dtype = np.uint8).copy()
     else :
         img = img.copy()
+    
+    # handle exception where there is no bounding boxes
+    if len(bboxes) == 0 : 
+        bboxes = [[0,0,0,0,0,0],]
 
     for bbox in bboxes:
         img = visualize_bbox(img, bbox)
@@ -143,13 +149,13 @@ def visualize_gridbbox(img, label_grid, numBox = 2, color = BOX_COLOR, thickness
     
 def nms(bboxes, threshold, iou_threshold) :
     '''
-    bboxes : [[class, x,y,w,h,c], ]. c = confidence score
+    bboxes : [[c, x,y,w,h,class], ]. c = confidence score
     threshold : confidence thresholds
     iou_threshold : if boxes overlap over iou_threshold, eliminate from the candidates
     '''
-    bboxes = [box for box in bboxes if box[-1] > threshold]
+    bboxes = [box for box in bboxes if box[0] > threshold]
     # sort by highest confidence
-    bboxes = sorted(bboxes, key = lambda x : x[-1]) 
+    bboxes = sorted(bboxes, key = lambda x : x[0]) 
 
     bboxes_after_nms = []
     while bboxes :
@@ -158,8 +164,8 @@ def nms(bboxes, threshold, iou_threshold) :
         bboxes = [
             box
             for box in bboxes
-            if box[-1] != chosen_box[-1] \
-                or IoU(torch.tensor(box), torch.tensor(chosen_box)) < iou_threshold
+            if box[0] != chosen_box[0] \
+                or IoU(box[1:5], chosen_box[1:5]) < iou_threshold
         ]
 
         bboxes_after_nms.append(chosen_box)
@@ -180,6 +186,7 @@ predictions and gts will be handed by reading gtfile directly, since dataloader 
 class MeanAveragePrecisionMetrics :
     def __init__(self, num_classes, iou_threshold_range, confidence_threshold) :
         '''
+        ## TODO : [conf, x, y, w, h, cls]
         gts, preds = [[[class, x, y, w, h, c],...], ...] # imgs x bboxes
 
         

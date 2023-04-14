@@ -3,9 +3,9 @@ num_workers: 4
 train:
   imgdir: '/mnt/c/Users/user/Desktop/projects/object_detection/data/images/train'
   jsonfile: '/mnt/c/Users/user/Desktop/projects/object_detection/data/label/det_train.json'
-valid:
+test:
   imgdir: '/mnt/c/Users/user/Desktop/projects/object_detection/data/images/val'
   jsonfile: '/mnt/c/Users/user/Desktop/projects/object_detection/data/label/det_val.json'
-test:
+predict:
   imgdir: '/mnt/c/Users/user/Desktop/projects/object_detection/data/images/test'
   jsonfile: None

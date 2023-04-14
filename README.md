@@ -24,10 +24,14 @@ yoloV1부터 yoloV8까지 직접 구현합니다. 이미 웹에 pytorch로 구�
 - pytorch
 - pytorch_lightning
 - albumentations
-
+- hydra  
 
 #### Dataset
 Berkeley DeepDrive Dataset  
 - link : https://bdd-data.berkeley.edu/  
 - pascal_voc 형태, [x1,y1,x2,y2]를 인풋으로 받습니다. albumentations에서 yolo format을 처리할 시에 생기는 에러 때문.  
 - [objectness, x, y, w, h, classes].
+
+
+#### Issue
+- pretrained darknet을 찾지 못함. detection 모델 학습 전, classification task를 사용해서 backbone network인 darknet을 pretrain시킴. RTX2070 하나로 큰 pretrained model을 직접 학습시키기에는 무리가 있음. 우선 pretrained 없이 바로 detection 모델 학습을 진행하기로 함.
