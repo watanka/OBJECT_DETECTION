@@ -32,48 +32,50 @@ class YOLOLoss(nn.Module):
         coordinate_loss = 0
         # class loss is considered per grid cell. We loop over gt boxes of the gridcells.
 
+        # for cx and cy
+        gridratio = 1 / self.num_grid
+        y = torch.arange(self.num_grid)
+        x = torch.arange(self.num_grid)
+        grid_y = grid_x.expand(batch_size, -1,-1)
+        grid_x = grid_y.expand(batch_size, -1,-1)
+
+
         for gtboxidx in range(self.numbox):
 
-            gt_coords = target[..., gtboxidx, :]
+            gt_label = target[..., gtboxidx, :]
 
-            identity_obj = gt_coords[..., 0:1]  # to remain the last dimension
-
-            # (batch_size x numgrid x numgrid x numbox x (pr(obj), x,y,w,h, classes))
-            total_pred_coords = output[..., gtboxidx, :] 
+            identity_obj = gt_label[..., 0:1]  # to remain the last dimension
 
             # ious = torch.zeros((batch_size, self.num_grid, self.num_grid, self.numbox))
-            ious = torch.zeros_like(total_pred_coords[..., 0])
+            ious = torch.zeros_like(output[..., 0])
 
             ## Box 갯수만큼 IoU를 계산
             # select only one box with the highest IoU
             for boxidx in range(self.numbox):  
-                pred_coords = total_pred_coords[..., boxidx, :]
-                ious[..., boxidx] = IoU(pred_coords[..., 1:], gt_coords[..., 1:])
+                pred_coords = output[..., boxidx, :]
+                ious[..., boxidx] = IoU(pred_coords[..., 1:5], gt_coords[..., 1:5])
 
-            _, iou_mask = torch.max(
-                ious, axis=-1, keepdim=True
-            )  # torch.max return max values of the selected axis and the indices of them. we are going to use these indices to select the highest IoU bboxes
+            # torch.max return max values of the selected axis and the indices of them. we are going to use these indices to select the highest IoU bboxes
+            _, iou_mask = torch.max(ious, axis=-1, keepdim=True)  
 
-            # iou mask turn into index slices
-            iou_mask = torch.cat([iou_mask + i for i in range(5)], dim=-1)
 
-            # print(total_pred_coords[iou_mask * 5 : (iou_mask+1) * 5].shape)
+            # (B, grid, grid, (5 + num_classes))
+            selected_preds = torch.gather(output, -2, iou_mask.unsqueeze(-1).repeat(1,1,1,1, 5 + self.num_classes ))  
 
-            selected_pred_coords = torch.gather(
-                total_pred_coords, -1, iou_mask
-            )  # (B, grid, grid, 1)
+            cx = selected_preds[...,1].sigmoid() + grid_x
+            cy = selected_preds[...,2].sigmoid() + grid_y
+            pw = selected_preds[...,3].exp() *
+            ph = selected_preds[...,4].exp() *
+            # sigmoid(px) + cx
 
-            # object loss calculated for the box with the highest IoU
-            # obj_loss = self.calculate_object_loss(selected_pred_coords[..., -1], gt_coords[], identity_obj)
-            # no_obj loss calculated for entire boxes compare with the gt
-            # no_obj_loss = self.calculate_no_obj_loss(total_pred_coords, gt_coords, identity_obj )
+
 
             ###############
             # OBJECT LOSS #
             ###############
 
             obj_loss += self.MSEloss(
-                identity_obj * selected_pred_coords[..., 0:1], identity_obj
+                identity_obj * selected_pred[..., 0:1], identity_obj
             )
 
             ##################
@@ -81,7 +83,7 @@ class YOLOLoss(nn.Module):
             ##################
             # penalize if no object gt grid predicts bbox
             noobj_loss += self.MSEloss(
-                (1 - identity_obj) * selected_pred_coords[..., 0:1], identity_obj
+                (1 - identity_obj) * selected_pred[..., 0:1], identity_obj
             )
 
             ###################
