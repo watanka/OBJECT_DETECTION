@@ -70,6 +70,13 @@ class BDDDataModule(pl.LightningDataModule) :
                                             self.num_classes, 
                                             self.numbox, 
                                             is_train = True, transform = self.train_transform)
+
+            self.test_dataset = BDDDataset(self.test_imgdir, 
+                                            self.test_jsonfile, 
+                                            self.num_grid, 
+                                            self.num_classes, 
+                                            self.numbox, 
+                                            is_train = True, transform = self.test_transform)
         if stage == 'validate' or stage == 'test' :
             self.test_dataset = BDDDataset(self.test_imgdir, 
                                             self.test_jsonfile, 

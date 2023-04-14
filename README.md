@@ -34,4 +34,7 @@ Berkeley DeepDrive Dataset
 
 
 #### Issue
+04-14  
 - pretrained darknet을 찾지 못함. detection 모델 학습 전, classification task를 사용해서 backbone network인 darknet을 pretrain시킴. RTX2070 하나로 큰 pretrained model을 직접 학습시키기에는 무리가 있음. 우선 pretrained 없이 바로 detection 모델 학습을 진행하기로 함.
+04-14  
+- 결괏값이 (confidence score, x, y, w, h, class), ...  이런 형태로 되어있어 가독성이 떨어지고 디버깅하기 어려움. dictionary로 각 박스에 따라 섹션을 나눠 분배하면 가독성이 조금 개선될듯함.  

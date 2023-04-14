@@ -32,7 +32,7 @@ def IoU(pred, gt) :
     gt_x2 = gt_x_center + gt_w / 2
     gt_y2 = gt_y_center + gt_h / 2
 
-    if type(pred_x1) == torch.tensor: 
+    if type(pred_x1) == torch.Tensor or type(pred_x1) == torch.tensor: 
 
         x1 = torch.max(pred_x1, gt_x1)
         y1 = torch.max(pred_y1, gt_y1)
@@ -50,6 +50,8 @@ def IoU(pred, gt) :
         y2 = np.min(pred_y2, gt_y2)
 
         intersection = np.minimum((x2 - x1), 0) * np.minimum((y2 - y1), 0)
+    else :
+        raise ValueError('IoU only supports numpy or torch')
     
     total_area = ((pred_x2 - pred_x1) * (pred_y2 - pred_y1)) + ((gt_x2 - gt_x1) * (gt_y2 - gt_y1))
 

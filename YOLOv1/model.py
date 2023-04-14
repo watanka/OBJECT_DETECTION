@@ -10,6 +10,7 @@ import pytorch_lightning as pl
 
 import torchvision
 import torchmetrics
+from torch.optim.lr_scheduler import LambdaLR
 from torchmetrics.detection.mean_ap import MeanAveragePrecision
 
 import matplotlib.pyplot as plt
@@ -161,7 +162,30 @@ class Yolov1(pl.LightningModule):
 
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=1e-3)
-        return optimizer
+
+        '''
+        135 epochs 중에서 
+        30 : 1e-3 (for the first epochs, number is not specified)
+        45 : 1e-2 (out of 75 epochs, first epochs + current = 75)
+        30 : 1e-3
+        30 : 1e-4
+        momentum 0.9, decay 5e-4
+        '''
+        def yolo_schedule(epoch) :
+            if 0 <= epoch < 30 :
+                lr = 1e-3
+            elif 30 <= epoch < 75 :
+                lr = 1e-2
+            elif 75 <= epoch < 105 :
+                lr = 1e-3
+            elif 105 <= epoch < 135 :
+                lr = 1e-4
+            return lr
+
+
+        scheduler = LambdaLR(optimizer, lr_lambda = yolo_schedule)
+
+        return [optimizer], [scheduler]
 
     def training_step(self, batch, batch_idx):
         img_batch, label_grid = batch
@@ -232,13 +256,13 @@ class Yolov1(pl.LightningModule):
             self.log("val_loss", loss)
 
             with torch.no_grad() :
-                pred_bboxes_batch = torch.tensor([nms(convert_labelgrid(p, numbox=self.numbox, num_classes=self.num_classes), threshold = 0.0, iou_threshold = 0.5) \
-                                    for p in pred])
+                pred_bboxes_batch = [torch.tensor(nms(convert_labelgrid(p, numbox=self.numbox, num_classes=self.num_classes), threshold = 0.0, iou_threshold = 0.5)) \
+                                    for p in pred]
 
                 bbox_visualization = []
-                for img, bboxes in zip(img_batch.detach(), pred_bboxes_batch.detach().cpu().numpy()) :
+                for img, bboxes in zip(img_batch.detach(), pred_bboxes_batch) :
 
-                    bbox_visualization.append(torch.tensor(visualize(img, bboxes)))
+                    bbox_visualization.append(torch.tensor(visualize(img, bboxes.numpy())))
 
                 grid_result = torch.stack(bbox_visualization).permute(0,3,1,2)
 

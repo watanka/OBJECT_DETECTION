@@ -23,7 +23,7 @@ def convert_labelgrid(label_grid, numbox, num_classes):
     coords_grid = label_grid[..., : numbox * 5]
 
     confidence_score_idx = [
-        1 + 5 * i for i in range(numbox)
+        5 * i for i in range(numbox)
     ]  # select only the confidence score indexes
     max_confidence_grid, idx_grid = torch.max(
         coords_grid[..., confidence_score_idx], keepdim=True, dim=-1
@@ -32,7 +32,7 @@ def convert_labelgrid(label_grid, numbox, num_classes):
     ## idx_grid refers to the index of box information with the highest confidence score. since [conf_score,x,y,w,h]. we divide confidence score divided by 5.
     coords_idx_grid = torch.cat([(idx_grid // 5) + i for i in range(5)], -1)
 
-    xywh_grid = torch.gather(coords_grid, -1, coords_idx_grid)
+    cxywh_grid = torch.gather(coords_grid, -1, coords_idx_grid)
 
     ## convert ratio respect to the image size => add y0, x0 coordinates. (y0, x0) differ by grid cell.
     gridsize = 1 / num_grid
@@ -42,7 +42,7 @@ def convert_labelgrid(label_grid, numbox, num_classes):
             y0 = gridsize * j
             x0 = gridsize * i
             confidence_score, x, y, w, h  = (
-                xywh_grid[j][i].detach().cpu().numpy().tolist()
+                cxywh_grid[j][i].detach().cpu().numpy().tolist()
             )
             pred_cls = max_probability_class_grid[j][i].detach().cpu().numpy().tolist()
 
