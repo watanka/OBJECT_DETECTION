@@ -50,9 +50,9 @@ architecture_config = [
     (3, 512, 1, 1),
     "M",
     (3, 1024, 1, 1),
-    (3, 512, 1, 0),
+    (1, 512, 1, 0),
     (3, 1024, 1, 1),
-    (3, 512, 1, 0),
+    (1, 512, 1, 0),
     (3, 1024, 1, 1),
 ]
 
@@ -70,15 +70,17 @@ class CNNBlock(nn.Module):
 
 class Yolov2(pl.LightningModule):
     def __init__(self, in_channels, anchorbox, num_grid, num_classes):
-        super(Yolov1, self).__init__()
+        super(Yolov2, self).__init__()
 
         self.anchorbox = anchorbox
-        self.numbox = numbox
+        self.numbox = len(self.anchorbox)
+        self.num_grid = num_grid
+        self.num_classes = num_classes
 
         self.architecture = architecture_config
         self.in_channels = in_channels
         self.darknet = self._create_conv_layers(self.architecture)
-        self.last_conv = CNNBlock(self.architecture[-1][1], self.numbox * (5+self.num_classes) )
+        self.last_conv = CNNBlock(self.architecture[-1][1] + self.architecture[-1][1] // 2, self.numbox * (5+self.num_classes), kernel_size = 1, stride = 1, padding = 0)
 
         
         self.yolo_loss = YOLOv2loss(
@@ -103,10 +105,12 @@ class Yolov2(pl.LightningModule):
             if i == 18 : # for skip connection
                 residual = x
             x = layer(x)
+
         
-        x += residual
-        
-        return self.last_conv(torch.flatten(x, start_dim=1))
+        x = torch.cat([x, residual], dim = 1) 
+        print(x.shape)
+        print(self.last_conv(x).shape)
+        return self.last_conv(x)
 
     def _create_conv_layers(self, architecture):
         layers = []
@@ -170,6 +174,7 @@ class Yolov2(pl.LightningModule):
         momentum 0.9, decay 5e-4
         '''
         def yolov2_schedule(epoch) :
+            lr = 1e-3
             if epoch + 1 == 60 :
                 lr *= 0.1
             elif epoch + 1 == 90 :
@@ -177,17 +182,15 @@ class Yolov2(pl.LightningModule):
             return lr
 
 
-        scheduler = LambdaLR(optimizer, lr_lambda = yolo_schedule)
+        scheduler = LambdaLR(optimizer, lr_lambda = yolov2_schedule)
 
         return [optimizer], [scheduler]
 
     def training_step(self, batch, batch_idx):
         img_batch, label_grid = batch
-
+        pred = pred.contiguous().reshape(-1, self.num_grid, self.num_grid, self.numbox, (5 + self.num_classes))
         pred = self.forward(img_batch)
-        pred = pred.reshape(
-            -1, self.num_grid, self.num_grid, (self.numbox * 5 + self.num_classes)
-        )
+        print('pred :', pred.shape)
 
         loss = self.yolo_loss(pred, label_grid)
         self.log("train_loss", loss)
@@ -242,9 +245,8 @@ class Yolov2(pl.LightningModule):
         if batch_idx % 100 == 0 :
             img_batch, label_grid_batch = batch
             pred = self.forward(img_batch)
-            pred = pred.reshape(
-                -1, self.num_grid, self.num_grid, (self.numbox * 5 + self.num_classes)
-            )
+            pred = pred.contiguous().reshape(-1, self.num_grid, self.num_grid, self.numbox, (5 + self.num_classes))
+            
 
             loss = self.yolo_loss(pred, label_grid_batch)
             self.log("val_loss", loss)
@@ -282,10 +284,8 @@ class Yolov2(pl.LightningModule):
 
     def predict_step(self, batch, batch_idx):
         pred = self.forward(batch)
-        pred = pred.reshape(
-            -1, self.num_grid, self.num_grid, (self.numbox * 5 + self.num_classes)
-        )
-
+        pred = pred.contiguous().reshape(-1, self.num_grid, self.num_grid, self.numbox, (5 + self.num_classes))
+        
         with torch.no_grad() :
             bboxes_batches = [nms(convert_labelgrid(p, numbox=self.numbox, num_classes=self.num_classes), threshold = 0.0, iou_threshold = 0.8) \
                                 for p in pred]
