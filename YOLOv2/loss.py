@@ -8,7 +8,7 @@ from global_utils import IoU
 
 
 class YOLOv2loss(nn.Module):
-    def __init__(self, anchorbox, lambda_coord=5, lambda_noobj=0.5, num_grid=7):
+    def __init__(self, anchorbox, num_classes, lambda_coord=5, lambda_noobj=0.5, num_grid=7):
         super().__init__()
 
         self.anchorbox = torch.tensor(anchorbox)
@@ -16,6 +16,7 @@ class YOLOv2loss(nn.Module):
         self.lambda_noobj = lambda_noobj
         self.num_grid = num_grid
         self.numbox = len(self.anchorbox)
+        self.num_classes = num_classes
         self.MSEloss = nn.MSELoss(reduction="mean")
 
     def forward(self, output, target):
@@ -60,7 +61,7 @@ class YOLOv2loss(nn.Module):
             for boxidx in range(self.numbox):  
                 pred_coords = output[..., boxidx, :]
                 print(pred_coords[..., 1:5].shape, gt_label[..., 1:5].shape)
-                ious[..., boxidx] = IoU(pred_coords[..., 1:5], gt_label[..., 1:5])
+                ious[..., boxidx: boxidx+1] = IoU(pred_coords[..., 1:5], gt_label[..., 1:5])
 
             # torch.max return max values of the selected axis and the indices of them. we are going to use these indices to select the highest IoU bboxes
             _, iou_mask = torch.max(ious, axis=-1, keepdim=True)  

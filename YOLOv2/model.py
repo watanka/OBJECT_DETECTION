@@ -88,6 +88,7 @@ class Yolov2(pl.LightningModule):
             lambda_noobj=0.5,
             num_grid=self.num_grid,
             anchorbox=self.anchorbox,
+            num_classes = self.num_classes
         )
 
         self.mAP = MeanAveragePrecision(
