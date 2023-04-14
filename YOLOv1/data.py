@@ -129,7 +129,7 @@ class BDDDataset(Dataset):
         else :
             # predict, test => No Label
             self.imgfiles = glob(os.path.join(self.imgdir,'*.jpg')) + glob(os.path.join(self.imgdir,'*.png'))
-
+            
 
 
         self.num_grid = num_grid

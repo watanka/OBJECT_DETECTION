@@ -1,3 +1,8 @@
+"""
+Implementation of Yolo (v2) architecture
+with slight modification with added BatchNorm.
+"""
+
 import torch
 import torch.nn as nn
 from torch import optim
@@ -11,32 +16,76 @@ from torchmetrics.detection.mean_ap import MeanAveragePrecision
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 
-from loss import YOLOLoss
+from loss import YOLOv2loss
 from utils import convert_labelgrid, decode_labelgrid
 import sys
 
 sys.path.append("../")
 from global_utils import visualize, nms
 
+""" 
+Information about architecture config:
+Tuple is structured by (kernel_size, filters, stride, padding) 
+"M" is simply maxpooling with stride 2x2 and kernel 2x2
+List is structured by tuples and lastly int with number of repeats
+"""
+
+architecture_config = [
+    (3, 32, 1, 1), # kernel_size, out_channels, stride, padding
+    "M",
+    (3, 64, 1, 1),
+    "M",
+    (3, 128, 1, 1),
+    (1, 64, 1, 0),
+    (3, 128, 1, 1),
+    "M",
+    (3, 256, 1, 1),
+    (1, 128, 1, 0),
+    (3, 256, 1, 1),
+    "M",
+    (3, 512, 1, 1),
+    (1, 256, 1, 0),
+    (3, 512, 1, 1),
+    (1, 256, 1, 0),
+    (3, 512, 1, 1),
+    "M",
+    (3, 1024, 1, 1),
+    (3, 512, 1, 0),
+    (3, 1024, 1, 1),
+    (3, 512, 1, 0),
+    (3, 1024, 1, 1),
+]
+
+
+class CNNBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, **kwargs):
+        super(CNNBlock, self).__init__()
+        self.conv = nn.Conv2d(in_channels, out_channels, bias=False, **kwargs)
+        self.batchnorm = nn.BatchNorm2d(out_channels)
+        self.leakyrelu = nn.LeakyReLU(0.1)
+
+    def forward(self, x):
+        return self.leakyrelu(self.batchnorm(self.conv(x)))
 
 
 class Yolov2(pl.LightningModule):
-    def __init__(self, in_channels=3, **kwargs):
+    def __init__(self, in_channels, anchorbox, num_grid, num_classes):
         super(Yolov1, self).__init__()
+
+        self.anchorbox = anchorbox
+        self.numbox = numbox
+
         self.architecture = architecture_config
         self.in_channels = in_channels
         self.darknet = self._create_conv_layers(self.architecture)
-        self.fcs = self._create_fcs(**kwargs)
+        self.last_conv = CNNBlock(self.architecture[-1][1], self.numbox * (5+self.num_classes) )
 
-        self.num_grid = kwargs["num_grid"]
-        self.numbox = kwargs["numbox"]
-        self.num_classes = kwargs["num_classes"]
-
-        self.yolo_loss = YOLOLoss(
+        
+        self.yolo_loss = YOLOv2loss(
             lambda_coord=5,
             lambda_noobj=0.5,
             num_grid=self.num_grid,
-            numbox=self.numbox,
+            anchorbox=self.anchorbox,
         )
 
         self.mAP = MeanAveragePrecision(
@@ -49,8 +98,15 @@ class Yolov2(pl.LightningModule):
     
 
     def forward(self, x):
-        x = self.darknet(x)
-        return self.fcs(torch.flatten(x, start_dim=1))
+        ## TODO : is there a knit way to do this?
+        for i, layer in enumerate(self.darknet) :
+            if i == 18 : # for skip connection
+                residual = x
+            x = layer(x)
+        
+        x += residual
+        
+        return self.last_conv(torch.flatten(x, start_dim=1))
 
     def _create_conv_layers(self, architecture):
         layers = []
@@ -100,23 +156,8 @@ class Yolov2(pl.LightningModule):
 
         return nn.Sequential(*layers)
 
-    def _create_fcs(self, num_grid, numbox, num_classes):
 
-        S, B, C = num_grid, numbox, num_classes
-
-        # In original paper this should be
-        # nn.Linear(1024*S*S, 4096),
-        # nn.LeakyReLU(0.1),
-        # nn.Linear(4096, S*S*(B*5+C))
-
-        return nn.Sequential(
-            nn.Flatten(),
-            nn.Linear(1024 * S * S, 496),
-            nn.Dropout(0.0),
-            nn.LeakyReLU(0.1),
-            nn.Linear(496, S * S * (C + B * 5)),
-        )
-
+        
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=1e-3)
 
@@ -128,15 +169,11 @@ class Yolov2(pl.LightningModule):
         30 : 1e-4
         momentum 0.9, decay 5e-4
         '''
-        def yolo_schedule(epoch) :
-            if 0 <= epoch < 30 :
-                lr = 1e-3
-            elif 30 <= epoch < 75 :
-                lr = 1e-2
-            elif 75 <= epoch < 105 :
-                lr = 1e-3
-            elif 105 <= epoch < 135 :
-                lr = 1e-4
+        def yolov2_schedule(epoch) :
+            if epoch + 1 == 60 :
+                lr *= 0.1
+            elif epoch + 1 == 90 :
+                lr *= 0.1
             return lr
 
 
