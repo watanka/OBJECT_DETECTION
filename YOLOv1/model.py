@@ -253,7 +253,7 @@ class Yolov1(pl.LightningModule):
             )
 
             loss = self.yolo_loss(pred, label_grid_batch)
-            self.log("val_loss", loss)
+            self.log("val_loss", loss, prog_bar= True)
 
             with torch.no_grad() :
                 pred_bboxes_batch = [torch.tensor(nms(convert_labelgrid(p, numbox=self.numbox, num_classes=self.num_classes), threshold = 0.0, iou_threshold = 0.5)) \
@@ -280,7 +280,7 @@ class Yolov1(pl.LightningModule):
                     self.mAP.update(preds = preds, target = target)
     
     def on_validation_epoch_end(self):
-        self.log_dict(self.mAP.compute())
+        self.log_dict(self.mAP.compute(), prog_bar= True)
         self.mAP.reset()
 
     
