@@ -11,7 +11,7 @@ class YOLOLoss(nn.Module):
     def __init__(self, anchorbox, lambda_coord=5, lambda_noobj=0.5, num_grid=7):
         super().__init__()
 
-        self.anchorbox = anchorbox
+        self.anchorbox = torch.tensor(anchorbox)
         self.lambda_coord = lambda_coord
         self.lambda_noobj = lambda_noobj
         self.num_grid = num_grid
@@ -39,6 +39,11 @@ class YOLOLoss(nn.Module):
         grid_y = grid_x.expand(batch_size, -1,-1)
         grid_x = grid_y.expand(batch_size, -1,-1)
 
+        # ph, pw
+        anchorbox_h = self.anchorbox[:,0]
+        anchorbox_w = self.anchorbox[:,1]
+
+
 
         for gtboxidx in range(self.numbox):
 
@@ -64,9 +69,8 @@ class YOLOLoss(nn.Module):
 
             cx = selected_preds[...,1].sigmoid() + grid_x
             cy = selected_preds[...,2].sigmoid() + grid_y
-            pw = selected_preds[...,3].exp() *
-            ph = selected_preds[...,4].exp() *
-            # sigmoid(px) + cx
+            pw = selected_preds[...,3].exp() * torch.take(anchorbox_w, iou_mask)
+            ph = selected_preds[...,4].exp() * torch.take(anchorbox_h, iou_mask)
 
 
 
