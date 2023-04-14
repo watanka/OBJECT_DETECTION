@@ -7,7 +7,7 @@ sys.path.append("../")  ## TODO : cleaner way to import module in parent directo
 from global_utils import IoU
 
 
-class YOLOLoss(nn.Module):
+class YOLOv2loss(nn.Module):
     def __init__(self, anchorbox, lambda_coord=5, lambda_noobj=0.5, num_grid=7):
         super().__init__()
 

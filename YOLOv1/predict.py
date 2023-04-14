@@ -9,6 +9,7 @@ from data import BDDDataModule
 import torch
 from torch.utils.data import DataLoader
 from PIL import Image
+import matplotlib.pyplot as plt
 
 import albumentations as A
 import albumentations.pytorch as pytorch
@@ -42,14 +43,14 @@ def predict(cfg: DictConfig) -> None :
     result_batch = trainer.predict(model = model,
                 datamodule = datamodule,
                 # when running in wsl, path should be changed accordingly
-                ckpt_path = '/mnt/c/Users/user/Desktop/projects/object_detection/YOLOv1/outputs/2023-04-12/14-18-40/tensorboard/yolov1-epoch=07-val_lossval_loss=0.00.ckpt',
+                ckpt_path = '/mnt/c/Users/user/Desktop/projects/object_detection/YOLOv1/outputs/2023-04-14/17-29-03/tensorboard/yolov1-epoch=22-val_loss=0.32.ckpt',
     )
 
     for result in result_batch :
         bboxes, bbox_visualization = result
-        print(len(bboxes))
-        print(bbox_visualization[0].shape)
 
+        for i, visualization in enumerate(bbox_visualization) :
+            plt.imsave(f'val{i}.jpg', visualization.numpy())
     
 
 if __name__ == '__main__' :
