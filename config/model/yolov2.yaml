@@ -1,5 +1,6 @@
 num_grid: 7
 numbox: 5
-anchorbox: 
+'''"There are fewer short, wide boxes and more tall, thin boxes", indicates that the ratio is H/W'''
+anchorbox: [1.3221, 1.73145, 3.19275, 4.00944, 5.05587, 8.09892, 9.47112, 4.84053, 11.2364, 10.0071]
 num_classes: 13
 img_size: 416
