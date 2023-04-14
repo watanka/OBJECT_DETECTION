@@ -1,6 +1,0 @@
-
-defaults:
-  - model : yolov1
-  - dataset : BDD
-  - aug : yolov1
-  - schedule : yolov1
