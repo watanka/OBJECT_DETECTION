@@ -33,13 +33,13 @@ class YOLOLoss(nn.Module):
 
         for gtbox_idx in range(self.numbox):
 
-            gt_coords = target[..., gtbox_idx * 5 : (gtbox_idx + 1) * 5]
+            gt_coords = target[..., gtbox_idx * 5  : (gtbox_idx + 1) * 5]
 
-            identity_obj = gt_coords[..., -1:]  # to remain the last dimension
+            identity_obj = gt_coords[..., 0:1]  # to remain the last dimension
 
             total_pred_coords = output[
                 ..., : self.numbox * 5
-            ]  # batch_size, grid, grid, (x,y,w,h,pr(obj) )
+            ]  # batch_size, grid, grid, (pr(obj), x,y,w,h, )
 
             # ious = torch.zeros((batch_size, self.num_grid, self.num_grid, self.numbox))
             ious = torch.zeros_like(total_pred_coords[..., : self.numbox])
@@ -48,8 +48,8 @@ class YOLOLoss(nn.Module):
             for box_idx in range(
                 self.numbox
             ):  # select only one box with the highest IoU
-                pred_coords = total_pred_coords[..., box_idx * 5 : (box_idx + 1) * 5]
-                ious[..., box_idx : box_idx + 1] = IoU(pred_coords, gt_coords)
+                pred_coords = total_pred_coords[..., box_idx * 5  : (box_idx + 1) * 5]
+                ious[..., box_idx : box_idx + 1] = IoU(pred_coords[..., 1:], gt_coords[..., 1:])
 
             _, iou_mask = torch.max(
                 ious, axis=-1, keepdim=True
@@ -74,7 +74,7 @@ class YOLOLoss(nn.Module):
             ###############
 
             obj_loss += self.MSEloss(
-                identity_obj * selected_pred_coords[..., -1:], identity_obj
+                identity_obj * selected_pred_coords[..., 0:1], identity_obj
             )
 
             ##################
@@ -82,14 +82,14 @@ class YOLOLoss(nn.Module):
             ##################
             # penalize if no object gt grid predicts bbox
             noobj_loss += self.MSEloss(
-                (1 - identity_obj) * selected_pred_coords[..., -1:], identity_obj
+                (1 - identity_obj) * selected_pred_coords[..., 0:1], identity_obj
             )
 
             ###################
             # COORDINATE LOSS #
             ###################
             coord_xy_loss, coord_wh_loss = self.calculate_boxloss(
-                selected_pred_coords, gt_coords, identity_obj
+                selected_pred_coords[..., 1:5], gt_coords[..., 1:5], identity_obj
             )
             coordinate_loss += coord_xy_loss + coord_wh_loss
 
@@ -97,7 +97,7 @@ class YOLOLoss(nn.Module):
         # CLASS LOSS #
         ##############
         # if any gt object exists, the first grid cell pr(object) = 1. We don't want to take account for no object box' class.
-        obj_exists = target[..., 5:6]
+        obj_exists = target[..., 0:1]
         class_loss = self.MSEloss(
             obj_exists * output[..., self.numbox * 5 :],
             obj_exists * target[..., self.numbox * 5 :],
