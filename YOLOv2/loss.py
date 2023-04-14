@@ -8,21 +8,20 @@ from global_utils import IoU
 
 
 class YOLOLoss(nn.Module):
-    def __init__(self, lambda_coord=5, lambda_noobj=0.5, num_grid=7, numbox=2):
+    def __init__(self, anchorbox, lambda_coord=5, lambda_noobj=0.5, num_grid=7):
         super().__init__()
 
+        self.anchorbox = anchorbox
         self.lambda_coord = lambda_coord
         self.lambda_noobj = lambda_noobj
         self.num_grid = num_grid
-        self.numbox = numbox
         self.MSEloss = nn.MSELoss(reduction="mean")
 
     def forward(self, output, target):
         """
-        for num_classes = 13, and numbox = 2,
+        for num_classes = 13, and anchorboxes = 2,
         each grid cell contains
-        [[x,y,w,h,pr(obj), x,y,w,h,pr(obj), 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,],]
-
+        [[pr(obj), x, y, w, h, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,] x anchorboxes ]
         """
         batch_size = output.size(0)
 

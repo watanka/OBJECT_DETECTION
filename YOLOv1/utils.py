@@ -1,7 +1,7 @@
 import torch
 
 
-## convert labelgrid into (bboxes, confidence_scores, labels)
+## convert labelgrid into (confidence_scores, bboxes, labels)
 def convert_labelgrid(label_grid, numbox, num_classes):
     """
     operations are grid units.
@@ -22,12 +22,9 @@ def convert_labelgrid(label_grid, numbox, num_classes):
     # select coordinates and confidence scores with highest probability per grid cell
     coords_grid = label_grid[..., : numbox * 5]
 
-    confidence_score_idx = [
-        5 * i for i in range(numbox)
-    ]  # select only the confidence score indexes
-    max_confidence_grid, idx_grid = torch.max(
-        coords_grid[..., confidence_score_idx], keepdim=True, dim=-1
-    )
+    # select only the confidence score indexes
+    confidence_score_idx = [5 * i for i in range(numbox)]  
+    max_confidence_grid, idx_grid = torch.max( coords_grid[..., confidence_score_idx], keepdim=True, dim=-1)
 
     ## idx_grid refers to the index of box information with the highest confidence score. since [conf_score,x,y,w,h]. we divide confidence score divided by 5.
     coords_idx_grid = torch.cat([(idx_grid // 5) + i for i in range(5)], -1)
