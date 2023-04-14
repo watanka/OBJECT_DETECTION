@@ -33,7 +33,7 @@ log = logging.getLogger(__name__)
 
 
 
-@hydra.main(config_path = '../config', config_name = 'config')
+@hydra.main(config_path = '../config', config_name = 'yolov1')
 def train(cfg : DictConfig) -> None :
 
     train_transform = A.Compose(

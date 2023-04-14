@@ -17,7 +17,7 @@ import albumentations.pytorch as pytorch
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
 
-@hydra.main(config_path='../config', config_name='config')
+@hydra.main(config_path='../config', config_name='yolov1')
 def predict(cfg: DictConfig) -> None :
 
     predict_transform = A.Compose(
