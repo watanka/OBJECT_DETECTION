@@ -191,7 +191,7 @@ class Yolov1(pl.LightningModule):
         img_batch, label_grid = batch
 
         pred = self.forward(img_batch)
-        pred = pred.reshape(
+        pred = pred.contiguous().reshape(
             -1, self.num_grid, self.num_grid, (self.numbox * 5 + self.num_classes)
         )
 

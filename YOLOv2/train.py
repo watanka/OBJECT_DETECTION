@@ -32,7 +32,7 @@ log = logging.getLogger(__name__)
 
 
 
-@hydra.main(config_path = '../config', config_name = 'config')
+@hydra.main(config_path = '../config', config_name = 'yolov2')
 def train(cfg : DictConfig) -> None :
 
     train_transform = A.Compose(
@@ -80,7 +80,7 @@ def train(cfg : DictConfig) -> None :
     model = Yolov2(in_channels = 3, num_grid= cfg.model.num_grid, anchorbox=cfg.model.anchorbox, num_classes=cfg.model.num_classes)            
     
     ## logger
-    tb_logger = TensorBoardLogger(save_dir = os.path.join(os.getcwd(), 'tensorboard/') , name = 'yolov1', version = '0')
+    tb_logger = TensorBoardLogger(save_dir = os.path.join(os.getcwd(), 'tensorboard/') , name = 'yolov2', version = '0')
     # print(f'Model weight will be saved with tensorboard logger {tb_logger.save_dir}.')
     ckptCallback = ModelCheckpoint(dirpath = tb_logger.save_dir, 
                                    filename = cfg.schedule.savefile_format,
@@ -95,7 +95,7 @@ def train(cfg : DictConfig) -> None :
     trainer.fit(
         model=model, datamodule= datamodule)
 
-@hydra.main(config_path = '../config', config_name = 'config')
+@hydra.main(config_path = '../config', config_name = 'yolov2')
 def validate(cfg : DictConfig) -> None :
     train_transform = A.Compose(
     [   A.Normalize(), # mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)

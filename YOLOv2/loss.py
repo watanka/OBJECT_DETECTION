@@ -36,6 +36,7 @@ class YOLOv2loss(nn.Module):
         gridratio = 1 / self.num_grid
         y = torch.arange(self.num_grid)
         x = torch.arange(self.num_grid)
+        grid_y, grid_x = torch.meshgrid(x,y, indexing = 'ij')
         grid_y = grid_x.expand(batch_size, -1,-1) * gridratio
         grid_x = grid_y.expand(batch_size, -1,-1) * gridratio
 
@@ -58,7 +59,8 @@ class YOLOv2loss(nn.Module):
             # select only one box with the highest IoU
             for boxidx in range(self.numbox):  
                 pred_coords = output[..., boxidx, :]
-                ious[..., boxidx] = IoU(pred_coords[..., 1:5], gt_coords[..., 1:5])
+                print(pred_coords[..., 1:5].shape, gt_label[..., 1:5].shape)
+                ious[..., boxidx] = IoU(pred_coords[..., 1:5], gt_label[..., 1:5])
 
             # torch.max return max values of the selected axis and the indices of them. we are going to use these indices to select the highest IoU bboxes
             _, iou_mask = torch.max(ious, axis=-1, keepdim=True)  

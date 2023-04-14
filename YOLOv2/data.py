@@ -223,7 +223,7 @@ class BDDDataset(Dataset):
 
             boxnum = grid_idxbox[grid_yidx][grid_xidx]
             if boxnum < len(self.anchorbox) : # if total number of boxes exceeds len(anchorbox), then ignore.
-                label_grid[grid_yidx, grid_xidx, boxnum, 5] = [1, normalized_x, normalized_y, w, h]
+                label_grid[grid_yidx, grid_xidx, boxnum, :5] = [1, normalized_x, normalized_y, w, h]
                 label_grid[grid_yidx, grid_xidx, boxnum, 5 + label] = 1
 
                 grid_idxbox[grid_yidx][grid_xidx] += 1

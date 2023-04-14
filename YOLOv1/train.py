@@ -96,7 +96,7 @@ def train(cfg : DictConfig) -> None :
     trainer.fit(
         model=model, datamodule= datamodule)
 
-@hydra.main(config_path = '../config', config_name = 'config')
+@hydra.main(config_path = '../config', config_name = 'yolov1')
 def validate(cfg : DictConfig) -> None :
     train_transform = A.Compose(
     [   A.Normalize(), # mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)
