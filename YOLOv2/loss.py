@@ -30,14 +30,14 @@ class YOLOLoss(nn.Module):
         obj_loss = 0
         noobj_loss = 0
         coordinate_loss = 0
-        # class loss is considered per grid cell. We loop over gt boxes of the gridcells.
+        class_loss = 0
 
         # for cx and cy
         gridratio = 1 / self.num_grid
         y = torch.arange(self.num_grid)
         x = torch.arange(self.num_grid)
-        grid_y = grid_x.expand(batch_size, -1,-1)
-        grid_x = grid_y.expand(batch_size, -1,-1)
+        grid_y = grid_x.expand(batch_size, -1,-1) * gridratio
+        grid_x = grid_y.expand(batch_size, -1,-1) * gridratio
 
         # ph, pw
         anchorbox_h = self.anchorbox[:,0]
@@ -49,7 +49,7 @@ class YOLOLoss(nn.Module):
 
             gt_label = target[..., gtboxidx, :]
 
-            identity_obj = gt_label[..., 0:1]  # to remain the last dimension
+            identity_obj = gt_label[..., 0:1]  
 
             # ious = torch.zeros((batch_size, self.num_grid, self.num_grid, self.numbox))
             ious = torch.zeros_like(output[..., 0])
@@ -67,17 +67,26 @@ class YOLOLoss(nn.Module):
             # (B, grid, grid, (5 + num_classes))
             selected_preds = torch.gather(output, -2, iou_mask.unsqueeze(-1).repeat(1,1,1,1, 5 + self.num_classes ))  
 
-            cx = selected_preds[...,1].sigmoid() + grid_x
-            cy = selected_preds[...,2].sigmoid() + grid_y
-            pw = selected_preds[...,3].exp() * torch.take(anchorbox_w, iou_mask)
-            ph = selected_preds[...,4].exp() * torch.take(anchorbox_h, iou_mask)
 
+            ###################
+            # COORDINATE LOSS #
+            ###################
+            pred_cx = selected_preds[...,1:2].sigmoid() + grid_x
+            pred_cy = selected_preds[...,2:3].sigmoid() + grid_y
+            pred_pw = selected_preds[...,3:4].exp() * torch.take(anchorbox_w, iou_mask)
+            pred_ph = selected_preds[...,4:5].exp() * torch.take(anchorbox_h, iou_mask)
 
+            gt_cx = gt_label[...,1:2]
+            gt_cy = gt_label[...,2:3]
+            gt_pw = gt_label[...,3:4]
+            gt_ph = gt_label[...,4:5]
+
+            coordinate_loss += identity_obj * ((gt_cx - pred_cx)**2 + (gt_cy - pred_cy)**2)
+            coordinate_loss += identity_obj * ((torch.sqrt(gt_cx - pred_cx))**2 + (torch.sqrt(gt_cy - pred_cy))**2)
 
             ###############
             # OBJECT LOSS #
             ###############
-
             obj_loss += self.MSEloss(
                 identity_obj * selected_pred[..., 0:1], identity_obj
             )
@@ -90,23 +99,15 @@ class YOLOLoss(nn.Module):
                 (1 - identity_obj) * selected_pred[..., 0:1], identity_obj
             )
 
-            ###################
-            # COORDINATE LOSS #
-            ###################
-            coord_xy_loss, coord_wh_loss = self.calculate_boxloss(
-                selected_pred_coords[..., 1:5], gt_coords[..., 1:5], identity_obj
-            )
-            coordinate_loss += coord_xy_loss + coord_wh_loss
+            
 
-        ##############
-        # CLASS LOSS #
-        ##############
-        # if any gt object exists, the first grid cell pr(object) = 1. We don't want to take account for no object box' class.
-        obj_exists = target[..., 0:1]
-        class_loss = self.MSEloss(
-            obj_exists * output[..., self.numbox * 5 :],
-            obj_exists * target[..., self.numbox * 5 :],
-        )
+            ##############
+            # CLASS LOSS #
+            ##############
+            class_loss += self.MSEloss(
+                identity_obj * selected_pred[..., self.numbox * 5 :],
+                identity_obj * gt_label[..., self.numbox * 5 :],
+            )
 
         loss = (
             coordinate_loss * self.lambda_coord
@@ -117,25 +118,3 @@ class YOLOLoss(nn.Module):
 
         return loss
 
-    def calculate_boxloss(self, pred, gt, identity_obj):
-        """
-        pred : (B x num_grid x num_grid x 5). selected with the highest IoU
-        gt : (B x num_grid x num_grid x 5)
-        identity_obj : whether object exists or not
-
-        """
-
-        ## COORDINATE LOSS
-        # (x - xpred)**2 + (y - ypred) ** 2
-        coord_xy_loss = self.MSEloss(
-            identity_obj * torch.square(gt[..., :2]), pred[..., :2]
-        )
-        # (w**(1/2) - wpred**(1/2)) + (h**(1/2) - hpred(1/2))
-        coord_wh_loss = self.MSEloss(
-            identity_obj
-            * torch.sign(pred[..., 2:4])
-            * torch.sqrt(torch.abs(pred[..., 2:4])),
-            torch.sqrt(gt[..., 2:4] + 1e-9),
-        )
-
-        return coord_xy_loss, coord_wh_loss
