@@ -275,7 +275,7 @@ class Yolov1(pl.LightningModule):
                     gt_bboxes_batch.append(decode_labelgrid(label_grid, numbox=self.numbox, num_classes=self.num_classes))
                 gt_bboxes_batch = torch.tensor(gt_bboxes_batch)
 
-                for pred_bboxes, gt_bboxes in tqdm(zip(pred_bboxes_batch, gt_bboxes_batch)) :
+                for pred_bboxes, gt_bboxes in zip(pred_bboxes_batch, gt_bboxes_batch) :
                     preds, target = self.get_predgt(pred_bboxes, gt_bboxes)
                     self.mAP.update(preds = preds, target = target)
     
