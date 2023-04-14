@@ -23,11 +23,11 @@ def convert_labelgrid(label_grid, numbox, num_classes):
     coords_grid = label_grid[..., : numbox * 5]
 
     # select only the confidence score indexes
-    confidence_score_idx = [5 * i for i in range(numbox)]  
+    confidence_score_idx = [i for i in range(numbox)]  
     max_confidence_grid, idx_grid = torch.max( coords_grid[..., confidence_score_idx], keepdim=True, dim=-1)
 
     ## idx_grid refers to the index of box information with the highest confidence score. since [conf_score,x,y,w,h]. we divide confidence score divided by 5.
-    coords_idx_grid = torch.cat([(idx_grid // 5) + i for i in range(5)], -1)
+    coords_idx_grid = torch.cat([idx_grid + i for i in range(5)], -1)
 
     cxywh_grid = torch.gather(coords_grid, -1, coords_idx_grid)
 
