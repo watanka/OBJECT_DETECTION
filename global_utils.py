@@ -4,56 +4,94 @@ import cv2
 import numpy as np
 
 
-def IoU(pred, gt) :
-    '''Intersection over Union'''
+# def IoU(pred, gt) :
+#     '''Intersection over Union'''
 
-    pred_x_center = pred[..., 0:1]
-    pred_y_center = pred[..., 1:2]
-    pred_w = pred[..., 2:3]
-    pred_h = pred[..., 3:4]
+#     pred_x_center = pred[..., 0:1]
+#     pred_y_center = pred[..., 1:2]
+#     pred_w = pred[..., 2:3]
+#     pred_h = pred[..., 3:4]
 
-    gt_x_center= gt[..., 0:1]
-    gt_y_center = gt[..., 1:2]
-    gt_w = gt[..., 2:3]
-    gt_h = gt[..., 3:4]
+#     gt_x_center= gt[..., 0:1]
+#     gt_y_center = gt[..., 1:2]
+#     gt_w = gt[..., 2:3]
+#     gt_h = gt[..., 3:4]
 
 
-    pred_x1 = pred_x_center - pred_w / 2
-    pred_y1 = pred_y_center - pred_h / 2
+#     pred_x1 = pred_x_center - pred_w / 2
+#     pred_y1 = pred_y_center - pred_h / 2
 
-    pred_x2 = pred_x_center + pred_w / 2
-    pred_y2 = pred_y_center + pred_h / 2
+#     pred_x2 = pred_x_center + pred_w / 2
+#     pred_y2 = pred_y_center + pred_h / 2
 
-    gt_x1 = gt_x_center - gt_w / 2
-    gt_y1 = gt_y_center - gt_h / 2
+#     gt_x1 = gt_x_center - gt_w / 2
+#     gt_y1 = gt_y_center - gt_h / 2
 
-    gt_x2 = gt_x_center + gt_w / 2
-    gt_y2 = gt_y_center + gt_h / 2
+#     gt_x2 = gt_x_center + gt_w / 2
+#     gt_y2 = gt_y_center + gt_h / 2
 
-    if type(pred_x1) == torch.Tensor or type(pred_x1) == torch.tensor: 
+#     if type(pred_x1) == torch.Tensor or type(pred_x1) == torch.tensor: 
 
-        x1 = torch.max(pred_x1, gt_x1)
-        y1 = torch.max(pred_y1, gt_y1)
+#         x1 = torch.max(pred_x1, gt_x1)
+#         y1 = torch.max(pred_y1, gt_y1)
 
-        x2 = torch.min(pred_x2, gt_x2)
-        y2 = torch.min(pred_y2, gt_y2)
+#         x2 = torch.min(pred_x2, gt_x2)
+#         y2 = torch.min(pred_y2, gt_y2)
 
-        intersection = (x2 - x1).clamp(0) * (y2 - y1).clamp(0)
-    elif type(pred_x1) == np.array :
+#         intersection = (x2 - x1).clamp(0) * (y2 - y1).clamp(0)
+#     elif type(pred_x1) == np.ndarray :
 
-        x1 = np.max(pred_x1, gt_x1)
-        y1 = np.max(pred_y1, gt_y1)
+#         x1 = np.max(pred_x1, gt_x1)
+#         y1 = np.max(pred_y1, gt_y1)
 
-        x2 = np.min(pred_x2, gt_x2)
-        y2 = np.min(pred_y2, gt_y2)
+#         x2 = np.min(pred_x2, gt_x2)
+#         y2 = np.min(pred_y2, gt_y2)
 
-        intersection = np.minimum((x2 - x1), 0) * np.minimum((y2 - y1), 0)
-    else :
-        raise ValueError('IoU only supports numpy or torch')
+#         intersection = np.minimum((x2 - x1), 0) * np.minimum((y2 - y1), 0)
+#     else :
+#         raise ValueError('IoU only supports numpy or torch')
     
-    total_area = ((pred_x2 - pred_x1) * (pred_y2 - pred_y1)) + ((gt_x2 - gt_x1) * (gt_y2 - gt_y1))
+#     total_area = ((pred_x2 - pred_x1) * (pred_y2 - pred_y1)) + ((gt_x2 - gt_x1) * (gt_y2 - gt_y1))
 
-    return intersection / (total_area - intersection + 1e-6) # add buffer
+#     return intersection / (total_area - intersection + 1e-6) # add buffer
+
+def IoU(box1, box2) :
+    # box = [x,y,w,h]
+    def box_area(box) :
+        return box[2] * box[3]
+    
+    box1_area = box_area(box1.T)
+    box2_area = box_area(box2.T)
+
+    box1_w = box1[..., 2:3]
+    box1_h = box1[..., 3:4]
+    box2_w = box2[..., 2:3]
+    box2_h = box2[..., 3:4]
+    box1_xmin = box1[..., 0:1] - box1_w / 2
+    box1_ymin = box1[..., 1:2] - box1_h / 2
+    box1_xmax = box1[..., 0:1] + box1_w / 2
+    box1_ymax = box1[..., 1:2] + box1_w / 2
+
+    box2_xmin = box2[..., 0:1] - box2_w / 2
+    box2_ymin = box2[..., 1:2] - box2_h / 2
+    box2_xmax = box2[..., 0:1] + box2_w / 2
+    box2_ymax = box2[..., 1:2] + box2_w / 2
+    
+    box1_topleft = np.concatenate([box1_xmin, box1_ymin], axis = -1)
+    box2_topleft = np.concatenate([box2_xmin, box2_ymin], axis = -1)
+
+    box1_bottomright = np.concatenate([box1_xmax, box1_ymax], axis = -1)
+    box2_bottomright = np.concatenate([box2_xmax, box2_ymax], axis = -1)
+
+    top_left = np.maximum(box1_topleft[:,None, :], box2_topleft)
+    bottom_right = np.maximum(box1_bottomright[:, None, :], box2_bottomright)
+
+
+
+    area_inter = np.prod(
+        np.clip(bottom_right - top_left, a_min = 0 , a_max = None), 2)
+
+    return area_inter / (box1_area[:, None] + box2_area - area_inter + 1e-9)
 
 
 
@@ -143,52 +181,76 @@ def visualize_gridbbox(img, label_grid, numBox = 2, color = BOX_COLOR, thickness
 
     
     
-def nms(bboxes, threshold, iou_threshold) :
+# def nms(bboxes, threshold, iou_threshold) :
+#     '''
+#     bboxes : [[c, x,y,w,h,class], ]. c = confidence score
+#     threshold : confidence thresholds
+#     iou_threshold : if boxes overlap over iou_threshold, eliminate from the candidates
+#     '''
+
+#     labels = set([box[-1] for box in bboxes])
+
+#     total_bboxes_after_nms = []
+
+#     for label in labels :
+
+#         bboxes = [box for box in bboxes if box[0] > threshold and box[-1] == label]
+#         # sort by highest confidence
+#         bboxes = sorted(bboxes, key = lambda x : x[0]) 
+
+#         bboxes_after_nms = []
+#         while bboxes :
+#             chosen_box = bboxes.pop()
+
+#             bboxes = [
+#                 box
+#                 for box in bboxes
+#                 if box[0] != chosen_box[0] \
+#                     or IoU(np.array(box[1:5]), np.array(chosen_box[1:5])) < iou_threshold
+#             ]
+
+#             bboxes_after_nms.append(chosen_box)
+#         total_bboxes_after_nms.extend(bboxes_after_nms)
+
+#     return np.array(total_bboxes_after_nms)
+
+def nms(predictions : np.ndarray, iou_threshold: float) -> np.ndarray :
     '''
-    bboxes : [[c, x,y,w,h,class], ]. c = confidence score
-    threshold : confidence thresholds
-    iou_threshold : if boxes overlap over iou_threshold, eliminate from the candidates
+    vectorize nms
+    reference : https://blog.roboflow.com/how-to-code-non-maximum-suppression-nms-in-plain-numpy/
     '''
+    rows, columns = predictions.shape
 
-    labels = set([box[-1] for box in bboxes])
+    sort_index = np.flip(predictions[:,0].argsort())
+    box1ictions = predictions[sort_index]
 
-    total_bboxes_after_nms = []
+    boxes = predictions[:, 1:5]
+    categories = predictions[:, -1]
+    ious = IoU(boxes, boxes)
+    ious = ious - np.eye(rows)
+    keep = np.ones(rows, dtype = bool)
 
-    for label in labels :
+    for index, (iou, category) in enumerate(zip(ious, categories)) :
+        if not keep[index] :
+            continue
+        
+        condition = (iou > iou_threshold) & (categories == category)
+        keep = keep & ~condition
 
-        bboxes = [box for box in bboxes if box[0] > threshold and box[-1] == label]
-        # sort by highest confidence
-        bboxes = sorted(bboxes, key = lambda x : x[0]) 
+    return predictions[keep[sort_index.argsort()]]
 
-        bboxes_after_nms = []
-        while bboxes :
-            chosen_box = bboxes.pop()
-
-            bboxes = [
-                box
-                for box in bboxes
-                if box[0] != chosen_box[0] \
-                    or IoU(np.array(box[1:5]), np.array(chosen_box[1:5])) < iou_threshold
-            ]
-
-            bboxes_after_nms.append(chosen_box)
-        total_bboxes_after_nms.extend(bboxes_after_nms)
-
-    return np.array(total_bboxes_after_nms)
-
-
-
-
-''' 
-reference : https://github.com/rafaelpadilla/Object-Detection-Metrics
-usage : validation, evaluation. 
-predictions and gts will be handed by reading gtfile directly, since dataloader limits the number of gt bounding box
-'''
 
 ## MAP
 
 class MeanAveragePrecisionMetrics :
     def __init__(self, num_classes, iou_threshold_range, confidence_threshold) :
+        ''' 
+        reference : https://github.com/rafaelpadilla/Object-Detection-Metrics
+        usage : validation, evaluation. 
+        predictions and gts will be handed by reading gtfile directly, since dataloader limits the number of gt bounding box
+        '''
+
+        
         '''
         ## TODO : [conf, x, y, w, h, cls]
         gts, preds = [[[class, x, y, w, h, c],...], ...] # imgs x bboxes
