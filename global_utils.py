@@ -24,8 +24,6 @@ def IoU(pred, gt) :
     pred_x2 = pred_x_center + pred_w / 2
     pred_y2 = pred_y_center + pred_h / 2
 
-
-
     gt_x1 = gt_x_center - gt_w / 2
     gt_y1 = gt_y_center - gt_h / 2
 
@@ -97,16 +95,12 @@ def visualize_bbox(img, bbox, color=BOX_COLOR, thickness=1):
     )
     return img
 
-def visualize(img, bboxes):
+def drawboxes(img, bboxes):
     if type(img) == torch.Tensor :
         img = img.permute(1,2,0).detach().cpu().numpy()
         img = np.array(img*255., dtype = np.uint8).copy()
     else :
         img = img.copy()
-    
-    # handle exception where there is no bounding boxes
-    if len(bboxes) == 0 : 
-        bboxes = [[0,0,0,0,0,0],]
 
     for bbox in bboxes:
         img = visualize_bbox(img, bbox)
@@ -155,24 +149,32 @@ def nms(bboxes, threshold, iou_threshold) :
     threshold : confidence thresholds
     iou_threshold : if boxes overlap over iou_threshold, eliminate from the candidates
     '''
-    bboxes = [box for box in bboxes if box[0] > threshold]
-    # sort by highest confidence
-    bboxes = sorted(bboxes, key = lambda x : x[0]) 
 
-    bboxes_after_nms = []
-    while bboxes :
-        chosen_box = bboxes.pop()
+    labels = set([box[-1] for box in bboxes])
 
-        bboxes = [
-            box
-            for box in bboxes
-            if box[0] != chosen_box[0] \
-                or IoU(box[1:5], chosen_box[1:5]) < iou_threshold
-        ]
+    total_bboxes_after_nms = []
 
-        bboxes_after_nms.append(chosen_box)
+    for label in labels :
 
-    return bboxes_after_nms
+        bboxes = [box for box in bboxes if box[0] > threshold and box[-1] == label]
+        # sort by highest confidence
+        bboxes = sorted(bboxes, key = lambda x : x[0]) 
+
+        bboxes_after_nms = []
+        while bboxes :
+            chosen_box = bboxes.pop()
+
+            bboxes = [
+                box
+                for box in bboxes
+                if box[0] != chosen_box[0] \
+                    or IoU(np.array(box[1:5]), np.array(chosen_box[1:5])) < iou_threshold
+            ]
+
+            bboxes_after_nms.append(chosen_box)
+        total_bboxes_after_nms.extend(bboxes_after_nms)
+
+    return np.array(total_bboxes_after_nms)
 
 
 

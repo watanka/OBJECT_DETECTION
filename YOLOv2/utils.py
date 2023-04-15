@@ -48,7 +48,7 @@ def convert_labelgrid(label_grid, anchorbox, num_classes):
                 cy = gridsize * j
                 cx = gridsize * i
                 anchor_h, anchor_w = anchorbox[boxidx].detach().cpu().numpy()
-                confidence_score = confidence_grid[j][i][boxidx].detach().cpu().numpy()
+                confidence_score = confidence_grid[j][i][boxidx].detach().cpu().numpy().item()
                 raw_x, raw_y, raw_w, raw_h = coords_grid[j][i][boxidx].detach().cpu().numpy()
 
 
@@ -58,7 +58,7 @@ def convert_labelgrid(label_grid, anchorbox, num_classes):
                 h = anchor_h * np.exp(raw_h)
 
 
-                pred_cls = max_probability_class_grid[j][i][boxidx].detach().cpu().numpy().tolist()
+                pred_cls = max_probability_class_grid[j][i][boxidx].detach().cpu().numpy().item()
 
                 bboxes.append([confidence_score, x, y, w, h, pred_cls])
 
@@ -82,7 +82,7 @@ def decode_labelgrid(label_grid, anchorbox, num_classes) :
         for i in range(num_grid):
             for boxidx in range(len(anchorbox)) :
                 confidence_score, x, y, w, h  = coords_grid[j][i][boxidx].detach().cpu().numpy().tolist() 
-                label = max_probability_class_grid[j][i][boxidx].detach().cpu().numpy().tolist()
+                label = max_probability_class_grid[j][i][boxidx].detach().cpu().numpy().item()
 
                 bboxes.append([confidence_score, x, y, w, h, label])
 

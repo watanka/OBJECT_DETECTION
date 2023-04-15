@@ -21,7 +21,7 @@ from utils import convert_labelgrid, decode_labelgrid
 import sys
 
 sys.path.append("../")
-from global_utils import visualize, nms
+from global_utils import drawboxes, nms
 
 """ 
 Information about architecture config:
@@ -262,7 +262,7 @@ class Yolov1(pl.LightningModule):
                 bbox_visualization = []
                 for img, bboxes in zip(img_batch.detach(), pred_bboxes_batch) :
 
-                    bbox_visualization.append(torch.tensor(visualize(img, bboxes.numpy())))
+                    bbox_visualization.append(torch.tensor(drawboxes(img, bboxes.numpy())))
 
                 grid_result = torch.stack(bbox_visualization).permute(0,3,1,2)
 
@@ -299,6 +299,6 @@ class Yolov1(pl.LightningModule):
             bbox_visualization = []
             for img, bboxes in zip(batch, bboxes_batches) :
 
-                bbox_visualization.append(torch.tensor(visualize(img, bboxes)))
+                bbox_visualization.append(torch.tensor(drawboxes(img, bboxes)))
         
         return bboxes_batches, bbox_visualization

@@ -21,7 +21,7 @@ from utils import convert_labelgrid, decode_labelgrid
 import sys
 
 sys.path.append("../")
-from global_utils import visualize, nms
+from global_utils import drawboxes, nms
 
 """ 
 Information about architecture config:
@@ -186,8 +186,8 @@ class Yolov2(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         img_batch, label_grid = batch
-        pred = pred.contiguous().reshape(-1, self.num_grid, self.num_grid, self.numbox, (5 + self.num_classes))
         pred = self.forward(img_batch)
+        pred = pred.contiguous().reshape(-1, self.num_grid, self.num_grid, self.numbox, (5 + self.num_classes))
 
         loss = self.yolo_loss(pred, label_grid)
         self.log("train_loss", loss)
@@ -195,16 +195,19 @@ class Yolov2(pl.LightningModule):
         if batch_idx % 100 == 0 :
 
             with torch.no_grad() :
-                bboxes_batches = [nms(convert_labelgrid(p, anchorbox = self.anchorbox, num_classes=self.num_classes), threshold = 0.0, iou_threshold = 0.8) \
-                                    for p in pred]
 
                 bbox_visualization = []
-                for img, bboxes in zip(img_batch, bboxes_batches) :
 
-                    bbox_visualization.append(torch.tensor(visualize(img, bboxes)))
+                # visualization
+                for img, p in zip(img_batch, pred) :
+                    bboxes = convert_labelgrid(p, anchorbox = self.anchorbox, num_classes=self.num_classes)
+                    bboxes_after_nms = nms(bboxes, threshold = 0.3, iou_threshold = 0.8)
+                    
+                    bbox_img = drawboxes(img, bboxes_after_nms)
+                    bbox_visualization.append(torch.tensor(bbox_img))
 
+                # hand over to to tensorboard
                 grid_result = torch.stack(bbox_visualization).permute(0,3,1,2)
-
                 grid = torchvision.utils.make_grid(grid_result)
                 self.logger.experiment.add_image("bbox visualization", grid, self.global_step)
 
@@ -217,9 +220,16 @@ class Yolov2(pl.LightningModule):
         bboxes = [[conf_score, cx, cy, w, h, cls],...]
         '''
 
-        pred_bboxes, gt_bboxes = torch.tensor(pred_bboxes), torch.tensor(gt_bboxes)
-        pred_conf, pred_coord, pred_cls = pred_bboxes[..., 0], pred_bboxes[..., 1:5], pred_bboxes[..., -1]
-        gt_obj, gt_coord, gt_cls = gt_bboxes[..., 0], gt_bboxes[..., 1:5], gt_bboxes[..., -1]
+        pred_conf, pred_coord, pred_cls = torch.tensor([]), torch.tensor([]), torch.tensor([])
+        gt_obj, gt_coord, gt_cls = torch.tensor([]), torch.tensor([]), torch.tensor([])
+        
+        if len(pred_bboxes) > 0 :
+            pred_bboxes = torch.tensor(pred_bboxes)
+            pred_conf, pred_coord, pred_cls = pred_bboxes[..., 0], pred_bboxes[..., 1:5], pred_bboxes[..., -1]
+
+        if len(gt_bboxes) > 0 :
+            gt_bboxes = torch.tensor(gt_bboxes)
+            gt_obj, gt_coord, gt_cls = gt_bboxes[..., 0], gt_bboxes[..., 1:5], gt_bboxes[..., -1]
 
         preds = [
             dict(
@@ -251,29 +261,29 @@ class Yolov2(pl.LightningModule):
             self.log("val_loss", loss)
 
             with torch.no_grad() :
-                pred_bboxes_batch = [nms(convert_labelgrid(p, anchorbox = self.anchorbox, num_classes=self.num_classes), threshold = 0.0, iou_threshold = 0.8) \
-                                    for p in pred]
 
                 bbox_visualization = []
-                for img, bboxes in zip(img_batch.detach(), pred_bboxes_batch) :
+                # for loop by batch
+                for img, gt_labelgrid, p in zip(img_batch, label_grid_batch, pred) :
 
-                    bbox_visualization.append(torch.tensor(visualize(img, bboxes)))
+                    pred_bboxes = convert_labelgrid(p, anchorbox = self.anchorbox, num_classes=self.num_classes)
+                    pred_bboxes_after_nms = nms(pred_bboxes, threshold = 0.3, iou_threshold = 0.8)
+                    
+                    gt_bboxes = torch.tensor(decode_labelgrid(gt_labelgrid, self.anchorbox, self.num_classes))
 
+                    # convert bbox format for mean average precision
+                    preds, targets = self.get_predgt(pred_bboxes_after_nms, gt_bboxes)
+                    # update on mean average precision
+                    self.mAP.update(preds = preds, target = targets)
+
+
+                    pred_bbox_img = drawboxes(img, pred_bboxes_after_nms)
+                    bbox_visualization.append(torch.tensor(pred_bbox_img))
+
+                # hand over to to tensorboard
                 grid_result = torch.stack(bbox_visualization).permute(0,3,1,2)
-
                 grid = torchvision.utils.make_grid(grid_result)
                 self.logger.experiment.add_image("bbox visualization", grid, self.global_step)
-
-
-                gt_bboxes_batch = []
-                for label_grid in label_grid_batch :
-                    gt_bboxes_batch.append(decode_labelgrid(label_grid, anchorbox=self.anchorbox, num_classes=self.num_classes))
-                
-                gt_bboxes_batch = torch.tensor(gt_bboxes_batch)
-
-                for pred_bboxes, gt_bboxes in zip(pred_bboxes_batch, gt_bboxes_batch) :
-                    preds, target = self.get_predgt(pred_bboxes, gt_bboxes)
-                    self.mAP.update(preds = preds, target = target)
     
     def on_validation_epoch_end(self):
         self.log_dict(self.mAP.compute())
@@ -287,12 +297,17 @@ class Yolov2(pl.LightningModule):
         pred = pred.contiguous().reshape(-1, self.num_grid, self.num_grid, self.numbox, (5 + self.num_classes))
         
         with torch.no_grad() :
-            bboxes_batches = [nms(convert_labelgrid(p, anchorbox = self.anchorbox, num_classes=self.num_classes), threshold = 0.0, iou_threshold = 0.8) \
-                                for p in pred]
 
             bbox_visualization = []
-            for img, bboxes in zip(batch, bboxes_batches) :
+            bboxes_batches = []
+            # visualization
+            for p in pred :
+                bboxes = convert_labelgrid(p, anchorbox = self.anchorbox, num_classes=self.num_classes)
+                bboxes_after_nms = nms(bboxes, threshold = 0.3, iou_threshold = 0.8)
+                
+                bbox_img = drawboxes(img, bboxes_after_nms)
 
-                bbox_visualization.append(torch.tensor(visualize(img, bboxes)))
-        
+                bboxes_batches.append(bboxes_after_nms)
+                bbox_visualization.append(torch.tensor(bbox_img))
+    
         return bboxes_batches, bbox_visualization
