@@ -62,7 +62,7 @@ def convert_labelgrid(label_grid, anchorbox, num_classes):
 
                 bboxes.append([confidence_score, x, y, w, h, pred_cls])
 
-    return torch.tensor(bboxes)
+    return np.array(bboxes)
 
 def decode_labelgrid(label_grid, anchorbox, num_classes) :
     '''For GT label conversion, separate from prediction conversion since gt label grid can have numBox true bboxes'''
