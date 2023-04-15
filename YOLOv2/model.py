@@ -201,7 +201,7 @@ class Yolov2(pl.LightningModule):
                 # visualization
                 for img, p in zip(img_batch, pred) :
                     bboxes = convert_labelgrid(p, anchorbox = self.anchorbox, num_classes=self.num_classes)
-                    bboxes_after_nms = nms(bboxes, threshold = 0.3, iou_threshold = 0.8)
+                    bboxes_after_nms = nms(bboxes, confidence_threshold = 0.3, iou_threshold = 0.8)
                     
                     bbox_img = drawboxes(img, bboxes_after_nms)
                     bbox_visualization.append(torch.tensor(bbox_img))
@@ -267,7 +267,7 @@ class Yolov2(pl.LightningModule):
                 for img, gt_labelgrid, p in zip(img_batch, label_grid_batch, pred) :
 
                     pred_bboxes = convert_labelgrid(p, anchorbox = self.anchorbox, num_classes=self.num_classes)
-                    pred_bboxes_after_nms = nms(pred_bboxes, threshold = 0.3, iou_threshold = 0.8)
+                    pred_bboxes_after_nms = nms(pred_bboxes, confidence_threshold = 0.3, iou_threshold = 0.8)
                     
                     gt_bboxes = torch.tensor(decode_labelgrid(gt_labelgrid, self.anchorbox, self.num_classes))
 
@@ -303,7 +303,7 @@ class Yolov2(pl.LightningModule):
             # visualization
             for p in pred :
                 bboxes = convert_labelgrid(p, anchorbox = self.anchorbox, num_classes=self.num_classes)
-                bboxes_after_nms = nms(bboxes, threshold = 0.3, iou_threshold = 0.8)
+                bboxes_after_nms = nms(bboxes, confidence_threshold = 0.3, iou_threshold = 0.8)
                 
                 bbox_img = drawboxes(img, bboxes_after_nms)
 

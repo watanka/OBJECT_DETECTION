@@ -57,16 +57,16 @@ import numpy as np
 
 def IoU(box1, box2) :
     # box = [x,y,w,h]
-    def box_area(box) :
-        return box[2] * box[3]
-    
-    box1_area = box_area(box1.T)
-    box2_area = box_area(box2.T)
 
+    
     box1_w = box1[..., 2:3]
     box1_h = box1[..., 3:4]
     box2_w = box2[..., 2:3]
     box2_h = box2[..., 3:4]
+
+    box1_area = box1_w * box1_h
+    box2_area = box2_w * box2_h
+
     box1_xmin = box1[..., 0:1] - box1_w / 2
     box1_ymin = box1[..., 1:2] - box1_h / 2
     box1_xmax = box1[..., 0:1] + box1_w / 2
@@ -77,21 +77,23 @@ def IoU(box1, box2) :
     box2_xmax = box2[..., 0:1] + box2_w / 2
     box2_ymax = box2[..., 1:2] + box2_w / 2
     
-    box1_topleft = np.concatenate([box1_xmin, box1_ymin], axis = -1)
-    box2_topleft = np.concatenate([box2_xmin, box2_ymin], axis = -1)
+    box1_topleft = torch.cat([box1_xmin, box1_ymin], axis = -1)
+    box2_topleft = torch.cat([box2_xmin, box2_ymin], axis = -1)
 
-    box1_bottomright = np.concatenate([box1_xmax, box1_ymax], axis = -1)
-    box2_bottomright = np.concatenate([box2_xmax, box2_ymax], axis = -1)
+    box1_bottomright = torch.cat([box1_xmax, box1_ymax], axis = -1)
+    box2_bottomright = torch.cat([box2_xmax, box2_ymax], axis = -1)
 
-    top_left = np.maximum(box1_topleft[:,None, :], box2_topleft)
-    bottom_right = np.maximum(box1_bottomright[:, None, :], box2_bottomright)
+    top_left = torch.max(box1_topleft, box2_topleft)
+    bottom_right = torch.min(box1_bottomright, box2_bottomright)
 
 
 
-    area_inter = np.prod(
-        np.clip(bottom_right - top_left, a_min = 0 , a_max = None), 2)
+    area_inter = torch.prod(
+        torch.clip(bottom_right - top_left, min = 0 , max = None), -1).unsqueeze(-1)
+    
 
-    return area_inter / (box1_area[:, None] + box2_area - area_inter + 1e-9)
+
+    return area_inter / (box1_area + box2_area - area_inter + 1e-9)
 
 
 
@@ -214,7 +216,7 @@ def visualize_gridbbox(img, label_grid, numBox = 2, color = BOX_COLOR, thickness
 
 #     return np.array(total_bboxes_after_nms)
 
-def nms(predictions : np.ndarray, iou_threshold: float) -> np.ndarray :
+def nms(predictions, confidence_threshold: float , iou_threshold: float) :
     '''
     vectorize nms
     reference : https://blog.roboflow.com/how-to-code-non-maximum-suppression-nms-in-plain-numpy/
@@ -222,13 +224,13 @@ def nms(predictions : np.ndarray, iou_threshold: float) -> np.ndarray :
     rows, columns = predictions.shape
 
     sort_index = np.flip(predictions[:,0].argsort())
-    box1ictions = predictions[sort_index]
+    predictions = predictions[sort_index]
 
     boxes = predictions[:, 1:5]
     categories = predictions[:, -1]
-    ious = IoU(boxes, boxes)
+    ious = IoU(torch.tensor(boxes), torch.tensor(boxes))
     ious = ious - np.eye(rows)
-    keep = np.ones(rows, dtype = bool)
+    keep = predictions[:, 0] > confidence_threshold # np.ones(rows, dtype = bool)
 
     for index, (iou, category) in enumerate(zip(ious, categories)) :
         if not keep[index] :
