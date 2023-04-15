@@ -10,6 +10,9 @@ from global_utils import IoU
 import torch
 
 
+def sigmoid(z):
+    return 1/(1 + np.exp(-z))
+
 ## convert labelgrid into (confidence_scores, bboxes, labels)
 def convert_labelgrid(label_grid, anchorbox, num_classes):
     """
@@ -45,17 +48,17 @@ def convert_labelgrid(label_grid, anchorbox, num_classes):
                 cy = gridsize * j
                 cx = gridsize * i
                 anchor_h, anchor_w = anchorbox[boxidx].detach().cpu().numpy()
-                confidence_score = confidence_grid[j][i].detach().cpu().numpy()
-                raw_x, raw_y, raw_w, raw_h = coords_grid[j][i].detach().cpu().numpy()
+                confidence_score = confidence_grid[j][i][boxidx].detach().cpu().numpy()
+                raw_x, raw_y, raw_w, raw_h = coords_grid[j][i][boxidx].detach().cpu().numpy()
 
 
-                y = torch.sigmoid(raw_y) + cy
-                x = torch.sigmoid(raw_x) + cx
-                w = anchor_w * torch.exp(raw_w)
-                h = anchor_h * torch.exp(raw_h)
+                y = sigmoid(raw_y) + cy
+                x = sigmoid(raw_x) + cx
+                w = anchor_w * np.exp(raw_w)
+                h = anchor_h * np.exp(raw_h)
 
 
-                pred_cls = max_probability_class_grid[j][i].detach().cpu().numpy().tolist()
+                pred_cls = max_probability_class_grid[j][i][boxidx].detach().cpu().numpy().tolist()
 
                 bboxes.append([confidence_score, x, y, w, h, pred_cls])
 
@@ -79,7 +82,7 @@ def decode_labelgrid(label_grid, anchorbox, num_classes) :
         for i in range(num_grid):
             for boxidx in range(len(anchorbox)) :
                 confidence_score, x, y, w, h  = coords_grid[j][i][boxidx].detach().cpu().numpy().tolist() 
-                label = max_probability_class_grid[j][i].detach().cpu().numpy().tolist()
+                label = max_probability_class_grid[j][i][boxidx].detach().cpu().numpy().tolist()
 
                 bboxes.append([confidence_score, x, y, w, h, label])
 

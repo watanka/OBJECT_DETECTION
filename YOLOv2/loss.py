@@ -19,7 +19,7 @@ class YOLOv2loss(nn.Module):
         self.num_grid = num_grid
         self.numbox = len(self.anchorbox)
         self.num_classes = num_classes
-        self.MSEloss = nn.MSELoss(reduction="mean")
+        self.MSEloss = nn.MSELoss(reduction="sum")
 
         # for cx and cy, grid cell value calculation
         y = torch.arange(self.num_grid)
@@ -35,9 +35,6 @@ class YOLOv2loss(nn.Module):
         [[x,y,w,h,pr(obj), x,y,w,h,pr(obj), 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,],]
 
         """
-
-        print('device info : ', self.device)
-
         batch_size = output.size(0)
 
         obj_loss = 0
@@ -74,7 +71,6 @@ class YOLOv2loss(nn.Module):
             # select only one box with the highest IoU
             for boxidx in range(self.numbox):  
                 pred_coords = output[..., boxidx, :]
-                print(pred_coords[..., 1:5].shape, gt_label[..., 1:5].shape)
                 ious[..., boxidx: boxidx+1] = IoU(pred_coords[..., 1:5], gt_label[..., 1:5])
 
             # torch.max return max values of the selected axis and the indices of them. we are going to use these indices to select the highest IoU bboxes
@@ -84,38 +80,33 @@ class YOLOv2loss(nn.Module):
             # (B, grid, grid, (5 + num_classes))
             selected_preds = torch.gather(output, -2, iou_mask.unsqueeze(-1).repeat(1,1,1,1, 5 + self.num_classes ))  
 
-
+            
             ###################
             # COORDINATE LOSS #
             ###################
-
-
-            print('device : ',  selected_preds.get_device(), anchorbox_w.get_device(), grid_x.get_device())
-
-
-            print('selected_preds[...,1:2].sigmoid().shape, grid_x.shape', selected_preds[...,1:2].sigmoid().shape, grid_x.shape)
-            print('selected_preds[...,3:4].exp(), torch.take(anchorbox_w, iou_mask).shape', selected_preds[...,3:4].exp().shape, torch.take(anchorbox_w, iou_mask).shape)
             pred_cx = selected_preds[...,1].sigmoid() + grid_x
             pred_cy = selected_preds[...,2].sigmoid() + grid_y
             pred_pw = selected_preds[...,3].exp() * torch.take(anchorbox_w, iou_mask)
             pred_ph = selected_preds[...,4].exp() * torch.take(anchorbox_h, iou_mask)
 
-            print('gt shape : ', gt_label[...,1].shape)
-            gt_cx = gt_label[...,1]
-            gt_cy = gt_label[...,2]
-            gt_pw = gt_label[...,3]
-            gt_ph = gt_label[...,4]
+            
+            gt_cx = gt_label[...,1:2]
+            gt_cy = gt_label[...,2:3]
+            gt_pw = gt_label[...,3:4]
+            gt_ph = gt_label[...,4:5]
 
-            print('identity_obj.shape : ', identity_obj.shape)
+            
 
-            coordinate_loss += identity_obj * ((gt_cx - pred_cx)**2 + (gt_cy - pred_cy)**2)
-            coordinate_loss += identity_obj * ((torch.sqrt(gt_cx - pred_cx))**2 + (torch.sqrt(gt_cy - pred_cy))**2)
+            coordinate_loss += self.MSEloss(identity_obj * pred_cx, identity_obj * gt_cx)
+            coordinate_loss += self.MSEloss(identity_obj * pred_cy, identity_obj * gt_cy)
+            coordinate_loss += self.MSEloss(identity_obj * torch.sqrt(pred_cx), identity_obj * torch.sqrt(gt_cx))
+            coordinate_loss += self.MSEloss(identity_obj * torch.sqrt(pred_cy), identity_obj * torch.sqrt(gt_cy))
 
             ###############
             # OBJECT LOSS #
             ###############
             obj_loss += self.MSEloss(
-                identity_obj * selected_pred[..., 0:1], identity_obj
+                identity_obj * selected_preds[..., 0], identity_obj
             )
 
             ##################
@@ -123,7 +114,7 @@ class YOLOv2loss(nn.Module):
             ##################
             # penalize if no object gt grid predicts bbox
             noobj_loss += self.MSEloss(
-                (1 - identity_obj) * selected_pred[..., 0:1], identity_obj
+                (1 - identity_obj) * selected_preds[..., 0], identity_obj
             )
 
             
@@ -132,8 +123,8 @@ class YOLOv2loss(nn.Module):
             # CLASS LOSS #
             ##############
             class_loss += self.MSEloss(
-                identity_obj * selected_pred[..., self.numbox * 5 :],
-                identity_obj * gt_label[..., self.numbox * 5 :],
+                identity_obj * selected_preds[..., 0, 5 :],
+                identity_obj * gt_label[...,  5 :],
             )
 
         loss = (
@@ -143,5 +134,5 @@ class YOLOv2loss(nn.Module):
             + class_loss
         )
 
-        return loss
+        return loss.mean()
 

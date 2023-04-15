@@ -139,7 +139,7 @@ def validate(cfg : DictConfig) -> None :
                                 predict_transform = predict_transform
                                 )
 
-    model = Yolov1(num_grid= cfg.model.num_grid, numbox=cfg.model.numbox, num_classes=cfg.model.num_classes)            
+    model = Yolov1(in_channels = 3, num_grid= cfg.model.num_grid, numbox=cfg.model.numbox, num_classes=cfg.model.num_classes)            
     
     ## logger
     tb_logger = TensorBoardLogger(save_dir = os.path.join(os.getcwd(), 'tensorboard/') , name = 'yolov1')
