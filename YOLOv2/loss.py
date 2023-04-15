@@ -8,10 +8,12 @@ from global_utils import IoU
 
 
 class YOLOv2loss(nn.Module):
-    def __init__(self, anchorbox, num_classes, lambda_coord=5, lambda_noobj=0.5, num_grid=7):
+    def __init__(self, anchorbox, num_classes, lambda_coord=5, lambda_noobj=0.5, num_grid=7, device = None):
         super().__init__()
 
-        self.anchorbox = torch.tensor(anchorbox)
+        self.device = device
+        self.register_buffer('anchorbox', torch.tensor(anchorbox))
+        
         self.lambda_coord = lambda_coord
         self.lambda_noobj = lambda_noobj
         self.num_grid = num_grid
@@ -19,6 +21,13 @@ class YOLOv2loss(nn.Module):
         self.num_classes = num_classes
         self.MSEloss = nn.MSELoss(reduction="mean")
 
+        # for cx and cy, grid cell value calculation
+        y = torch.arange(self.num_grid)
+        x = torch.arange(self.num_grid)
+        grid_y, grid_x = torch.meshgrid(x,y, indexing = 'ij')
+        self.register_buffer('grid_x', grid_x)
+        self.register_buffer('grid_y', grid_y)
+        
     def forward(self, output, target):
         """
         for num_classes = 13, and numbox = 2,
@@ -26,6 +35,9 @@ class YOLOv2loss(nn.Module):
         [[x,y,w,h,pr(obj), x,y,w,h,pr(obj), 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,],]
 
         """
+
+        print('device info : ', self.device)
+
         batch_size = output.size(0)
 
         obj_loss = 0
@@ -35,11 +47,13 @@ class YOLOv2loss(nn.Module):
 
         # for cx and cy
         gridratio = 1 / self.num_grid
-        y = torch.arange(self.num_grid)
-        x = torch.arange(self.num_grid)
-        grid_y, grid_x = torch.meshgrid(x,y, indexing = 'ij')
-        grid_y = grid_x.expand(batch_size, -1,-1) * gridratio
-        grid_x = grid_y.expand(batch_size, -1,-1) * gridratio
+        
+        grid_y = self.grid_y.expand(batch_size, -1,-1).unsqueeze(-1) * gridratio
+        grid_x = self.grid_x.expand(batch_size, -1,-1).unsqueeze(-1) * gridratio
+
+        grid_y = grid_y
+        grid_x = grid_x
+
 
         # ph, pw
         anchorbox_h = self.anchorbox[:,0]
@@ -74,15 +88,25 @@ class YOLOv2loss(nn.Module):
             ###################
             # COORDINATE LOSS #
             ###################
-            pred_cx = selected_preds[...,1:2].sigmoid() + grid_x
-            pred_cy = selected_preds[...,2:3].sigmoid() + grid_y
-            pred_pw = selected_preds[...,3:4].exp() * torch.take(anchorbox_w, iou_mask)
-            pred_ph = selected_preds[...,4:5].exp() * torch.take(anchorbox_h, iou_mask)
 
-            gt_cx = gt_label[...,1:2]
-            gt_cy = gt_label[...,2:3]
-            gt_pw = gt_label[...,3:4]
-            gt_ph = gt_label[...,4:5]
+
+            print('device : ',  selected_preds.get_device(), anchorbox_w.get_device(), grid_x.get_device())
+
+
+            print('selected_preds[...,1:2].sigmoid().shape, grid_x.shape', selected_preds[...,1:2].sigmoid().shape, grid_x.shape)
+            print('selected_preds[...,3:4].exp(), torch.take(anchorbox_w, iou_mask).shape', selected_preds[...,3:4].exp().shape, torch.take(anchorbox_w, iou_mask).shape)
+            pred_cx = selected_preds[...,1].sigmoid() + grid_x
+            pred_cy = selected_preds[...,2].sigmoid() + grid_y
+            pred_pw = selected_preds[...,3].exp() * torch.take(anchorbox_w, iou_mask)
+            pred_ph = selected_preds[...,4].exp() * torch.take(anchorbox_h, iou_mask)
+
+            print('gt shape : ', gt_label[...,1].shape)
+            gt_cx = gt_label[...,1]
+            gt_cy = gt_label[...,2]
+            gt_pw = gt_label[...,3]
+            gt_ph = gt_label[...,4]
+
+            print('identity_obj.shape : ', identity_obj.shape)
 
             coordinate_loss += identity_obj * ((gt_cx - pred_cx)**2 + (gt_cy - pred_cy)**2)
             coordinate_loss += identity_obj * ((torch.sqrt(gt_cx - pred_cx))**2 + (torch.sqrt(gt_cy - pred_cy))**2)
