@@ -256,7 +256,7 @@ class Yolov1(pl.LightningModule):
             self.log("val_loss", loss, prog_bar= True)
 
             with torch.no_grad() :
-                pred_bboxes_batch = [torch.tensor(nms(convert_labelgrid(p, numbox=self.numbox, num_classes=self.num_classes), threshold = 0.0, iou_threshold = 0.5)) \
+                pred_bboxes_batch = [torch.tensor(nms(convert_labelgrid(p, numbox=self.numbox, num_classes=self.num_classes), confidence_threshold = 0.0, iou_threshold = 0.5)) \
                                     for p in pred]
 
                 bbox_visualization = []
@@ -293,7 +293,7 @@ class Yolov1(pl.LightningModule):
         )
 
         with torch.no_grad() :
-            bboxes_batches = [nms(convert_labelgrid(p, numbox=self.numbox, num_classes=self.num_classes), threshold = 0.0, iou_threshold = 0.8) \
+            bboxes_batches = [nms(convert_labelgrid(p, numbox=self.numbox, num_classes=self.num_classes), confidence_threshold = 0.0, iou_threshold = 0.8) \
                                 for p in pred]
 
             bbox_visualization = []

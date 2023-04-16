@@ -50,8 +50,8 @@ class YOLOv2loss(nn.Module):
 
 
         # ph, pw
-        anchorbox_h = self.anchorbox[:,0]
-        anchorbox_w = self.anchorbox[:,1]
+        anchorbox_h = self.anchorbox[:,0] * gridratio
+        anchorbox_w = self.anchorbox[:,1] * gridratio
 
 
         for gtboxidx in range(self.numbox):

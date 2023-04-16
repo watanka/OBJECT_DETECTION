@@ -228,7 +228,7 @@ def nms(predictions, confidence_threshold: float , iou_threshold: float) :
 
     boxes = predictions[:, 1:5]
     categories = predictions[:, -1]
-    ious = IoU(torch.tensor(boxes), torch.tensor(boxes))
+    ious = IoU(torch.tensor(boxes), torch.tensor(boxes)).detach().cpu().numpy()
     ious = ious - np.eye(rows)
     keep = predictions[:, 0] > confidence_threshold # np.ones(rows, dtype = bool)
 

@@ -220,16 +220,16 @@ class Yolov2(pl.LightningModule):
         bboxes = [[conf_score, cx, cy, w, h, cls],...]
         '''
 
-        pred_conf, pred_coord, pred_cls = torch.tensor([]), torch.tensor([]), torch.tensor([])
-        gt_obj, gt_coord, gt_cls = torch.tensor([]), torch.tensor([]), torch.tensor([])
+        # pred_conf, pred_coord, pred_cls = torch.tensor([]), torch.tensor([]), torch.tensor([])
+        # gt_obj, gt_coord, gt_cls = torch.tensor([]), torch.tensor([]), torch.tensor([])
         
-        if len(pred_bboxes) > 0 :
-            pred_bboxes = torch.tensor(pred_bboxes)
-            pred_conf, pred_coord, pred_cls = pred_bboxes[..., 0], pred_bboxes[..., 1:5], pred_bboxes[..., -1]
+        # if len(pred_bboxes) > 0 :
+        pred_bboxes = torch.tensor(pred_bboxes)
+        pred_conf, pred_coord, pred_cls = pred_bboxes[..., 0], pred_bboxes[..., 1:5], pred_bboxes[..., -1]
 
-        if len(gt_bboxes) > 0 :
-            gt_bboxes = torch.tensor(gt_bboxes)
-            gt_obj, gt_coord, gt_cls = gt_bboxes[..., 0], gt_bboxes[..., 1:5], gt_bboxes[..., -1]
+        # if len(gt_bboxes) > 0 :
+        gt_bboxes = torch.tensor(gt_bboxes)
+        gt_obj, gt_coord, gt_cls = gt_bboxes[..., 0], gt_bboxes[..., 1:5], gt_bboxes[..., -1]
 
         preds = [
             dict(

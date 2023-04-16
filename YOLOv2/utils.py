@@ -48,6 +48,10 @@ def convert_labelgrid(label_grid, anchorbox, num_classes):
                 cy = gridsize * j
                 cx = gridsize * i
                 anchor_h, anchor_w = anchorbox[boxidx].detach().cpu().numpy()
+
+                anchor_h *= gridsize
+                anchor_w *= gridsize
+
                 confidence_score = confidence_grid[j][i][boxidx].detach().cpu().numpy().item()
                 raw_x, raw_y, raw_w, raw_h = coords_grid[j][i][boxidx].detach().cpu().numpy()
 
