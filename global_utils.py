@@ -4,56 +4,15 @@ import cv2
 import numpy as np
 
 
-# def IoU(pred, gt) :
-#     '''Intersection over Union'''
-
-#     pred_x_center = pred[..., 0:1]
-#     pred_y_center = pred[..., 1:2]
-#     pred_w = pred[..., 2:3]
-#     pred_h = pred[..., 3:4]
-
-#     gt_x_center= gt[..., 0:1]
-#     gt_y_center = gt[..., 1:2]
-#     gt_w = gt[..., 2:3]
-#     gt_h = gt[..., 3:4]
-
-
-#     pred_x1 = pred_x_center - pred_w / 2
-#     pred_y1 = pred_y_center - pred_h / 2
-
-#     pred_x2 = pred_x_center + pred_w / 2
-#     pred_y2 = pred_y_center + pred_h / 2
-
-#     gt_x1 = gt_x_center - gt_w / 2
-#     gt_y1 = gt_y_center - gt_h / 2
-
-#     gt_x2 = gt_x_center + gt_w / 2
-#     gt_y2 = gt_y_center + gt_h / 2
-
-#     if type(pred_x1) == torch.Tensor or type(pred_x1) == torch.tensor: 
-
-#         x1 = torch.max(pred_x1, gt_x1)
-#         y1 = torch.max(pred_y1, gt_y1)
-
-#         x2 = torch.min(pred_x2, gt_x2)
-#         y2 = torch.min(pred_y2, gt_y2)
-
-#         intersection = (x2 - x1).clamp(0) * (y2 - y1).clamp(0)
-#     elif type(pred_x1) == np.ndarray :
-
-#         x1 = np.max(pred_x1, gt_x1)
-#         y1 = np.max(pred_y1, gt_y1)
-
-#         x2 = np.min(pred_x2, gt_x2)
-#         y2 = np.min(pred_y2, gt_y2)
-
-#         intersection = np.minimum((x2 - x1), 0) * np.minimum((y2 - y1), 0)
-#     else :
-#         raise ValueError('IoU only supports numpy or torch')
+def IoU_width_height(box1, box2) :
+    '''
+    calculate IoU as if the center point is fixed.
+    used to calculate corresponding anchor box to gt.
+    '''
+    intersection = torch.min(box1[...,0], box2[...,1]) * torch.min(box1[..., 1], box2[...,1])
+    union = box1[...,0] * box1[...,1] + box2[...,0] * box2[...,1] - intersection
     
-#     total_area = ((pred_x2 - pred_x1) * (pred_y2 - pred_y1)) + ((gt_x2 - gt_x1) * (gt_y2 - gt_y1))
-
-#     return intersection / (total_area - intersection + 1e-6) # add buffer
+    return intersection / (union + 1e-9)
 
 def IoU(box1, box2) :
     # box = [x,y,w,h]
