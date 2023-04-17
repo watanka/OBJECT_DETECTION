@@ -162,7 +162,7 @@ class Yolov2(pl.LightningModule):
 
         
     def configure_optimizers(self):
-        optimizer = optim.Adam(self.parameters(), lr=1e-3)
+        optimizer = optim.Adam(self.parameters(), lr=1e-3, weight_decay = 5e-4, momentum = 0.9)
 
         '''
         135 epochs 중에서 

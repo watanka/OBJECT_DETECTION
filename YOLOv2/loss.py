@@ -49,8 +49,8 @@ class YOLOv2loss(nn.Module):
         # grid_y = self.grid_y.clone()
         # grid_x = self.grid_x.clone()
 
-        grid_y = grid_y.expand(batch_size, -1,-1).clone().unsqueeze(-1) * gridratio
-        grid_x = grid_x.expand(batch_size, -1,-1).clone().unsqueeze(-1) * gridratio
+        grid_y = self.grid_y.expand(batch_size, -1,-1).clone().unsqueeze(-1) * gridratio
+        grid_x = self.grid_x.expand(batch_size, -1,-1).clone().unsqueeze(-1) * gridratio
 
         # grid_y = grid_y.clone()
         # grid_x = grid_x.clone()
