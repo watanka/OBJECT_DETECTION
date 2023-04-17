@@ -79,6 +79,7 @@ class Yolov2(pl.LightningModule):
         self.architecture = architecture_config
         self.in_channels = in_channels
         self.darknet = self._create_conv_layers(self.architecture)
+        ## channel size for passthrough layer
         self.last_conv = CNNBlock(self.architecture[-1][1] + self.architecture[-1][1] // 2, self.numbox * (5+self.num_classes), kernel_size = 1, stride = 1, padding = 0)
 
         
@@ -292,8 +293,8 @@ class Yolov2(pl.LightningModule):
     
 
 
-    def predict_step(self, batch, batch_idx):
-        pred = self.forward(batch)
+    def predict_step(self, img_batch, batch_idx):
+        pred = self.forward(img_batch)
         pred = pred.contiguous().reshape(-1, self.num_grid, self.num_grid, self.numbox, (5 + self.num_classes))
         
         with torch.no_grad() :
@@ -301,7 +302,7 @@ class Yolov2(pl.LightningModule):
             bbox_visualization = []
             bboxes_batches = []
             # visualization
-            for p in pred :
+            for p, img in zip(pred, img_batch) :
                 bboxes = convert_labelgrid(p, anchorbox = self.anchorbox, num_classes=self.num_classes)
                 bboxes_after_nms = nms(bboxes, confidence_threshold = 0.3, iou_threshold = 0.8)
                 

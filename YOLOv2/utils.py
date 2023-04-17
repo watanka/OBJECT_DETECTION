@@ -6,6 +6,8 @@ from tqdm import tqdm
 import json
 import random
 
+import sys
+sys.path.append('../')
 from global_utils import IoU
 import torch
 

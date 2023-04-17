@@ -112,7 +112,8 @@ def visualize_bbox(img, bbox, color=BOX_COLOR, thickness=1):
     """
     img_h, img_w = img.shape[:2]
 
-    confidence_score, x, y, w, h, pred_cls = bbox
+    confidence_score, x, y, w, h, pred_cls = map(float, bbox)
+    pred_cls = int(pred_cls)
     
     x_min, x_max, y_min, y_max = x - w/2, x + w/2, y - h/2, y + h/2
     x_min = int(img_w * x_min)
