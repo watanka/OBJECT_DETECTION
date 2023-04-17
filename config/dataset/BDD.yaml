@@ -9,3 +9,4 @@ test:
 predict:
   imgdir: '/mnt/c/Users/user/Desktop/projects/object_detection/data/images/test'
   jsonfile: None
+

@@ -31,6 +31,30 @@ List is structured by tuples and lastly int with number of repeats
 """
 
 architecture_config = [
+    (32, 3, 1),
+    (64, 3, 2),
+    ["B", 1],
+    (128, 3, 2),
+    ["B", 2],
+    (256, 3, 2),
+    ["B", 8],
+    (512, 3, 2),
+    ["B", 8],
+    (1024, 3, 2),
+    ["B", 4],  # To this point is Darknet-53
+    (512, 1, 1),
+    (1024, 3, 1),
+    "S",
+    (256, 1, 1),
+    "U",
+    (256, 1, 1),
+    (512, 3, 1),
+    "S",
+    (128, 1, 1),
+    "U",
+    (128, 1, 1),
+    (256, 3, 1),
+    "S",
 
 ]
 
@@ -83,29 +107,25 @@ class ScalePrediction(nn.Module) :
         return (
             self.pred(x)
             .reshape(x.shape[0], 3, self.num_classes + 5, x.shape[2], x.shape[3])
-            .permute(0, 1, 3, 4, 2) # batch_size, 3, numgrid, numgrid, num_classes + 5 
-            ## TODO : change to batch_size, numgrid, numgrid, 3, num_classes + 5
+            .permute(0, 1, 3, 4, 2) # batch_size, numgrid, numgrid, 3, num_classes + 5
         )
 
 class Yolov3(pl.LightningModule):
-    def __init__(self, in_channels, anchorbox, num_grid, num_classes):
+    def __init__(self, in_channels, multiscales, anchorbox, num_classes):
         super(Yolov2, self).__init__()
         self.register_buffer('anchorbox', torch.tensor(anchorbox))
-        self.numbox = len(self.anchorbox)
-        self.num_grid = num_grid
+        self.multiscales = multiscales
+        self.numbox = len(self.anchorbox) // len(self.multiscales)
         self.num_classes = num_classes
 
         self.architecture = architecture_config
         self.in_channels = in_channels
-        self.darknet = self._create_conv_layers(self.architecture)
-        ## channel size for passthrough layer
-        self.last_conv = CNNBlock(self.architecture[-1][1] + self.architecture[-1][1] // 2, self.numbox * (5+self.num_classes), kernel_size = 1, stride = 1, padding = 0)
+        self.layers = self._create_conv_layers(self.architecture)
 
         
         self.yolo_loss = YOLOv2loss(
             lambda_coord=5,
             lambda_noobj=0.5,
-            num_grid=self.num_grid,
             anchorbox=self.anchorbox,
             num_classes = self.num_classes,
             device = self.device
@@ -135,7 +155,7 @@ class Yolov3(pl.LightningModule):
                 route_connections.append(x)
 
             elif isinstance(layer, nn.Upsample) :
-                x = torch.cat([x, route_connections[-1]], dim = 1) ## TODO : if dimension order change, then should be fixed accordingly
+                x = torch.cat([x, route_connections[-1]], dim = 1) ##
                 route_connections.pop()
 
         return outputs
@@ -205,30 +225,34 @@ class Yolov3(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         img_batch, label_grid = batch
-        pred = self.forward(img_batch)
-        pred = pred.contiguous().reshape(-1, self.num_grid, self.num_grid, self.numbox, (5 + self.num_classes))
+        pred_multiscales = self.forward(img_batch)
 
-        loss = self.yolo_loss(pred, label_grid)
-        self.log("train_loss", loss)
 
-        if batch_idx % 100 == 0 :
+        for scale_idx in range(len(self.multiscales)) :
+            ## TODO 
+            pred = pred_multiscales[scale_idx].contiguous().reshape(-1, self.num_grid, self.num_grid, self.numbox, (5 + self.num_classes))
 
-            with torch.no_grad() :
+            loss = self.yolo_loss(pred, label_grid)
+            self.log("train_loss", loss)
 
-                bbox_visualization = []
+            if batch_idx % 100 == 0 :
 
-                # visualization
-                for img, p in zip(img_batch, pred) :
-                    bboxes = convert_labelgrid(p, anchorbox = self.anchorbox, num_classes=self.num_classes)
-                    bboxes_after_nms = nms(bboxes, confidence_threshold = 0.3, iou_threshold = 0.8)
-                    
-                    bbox_img = drawboxes(img, bboxes_after_nms)
-                    bbox_visualization.append(torch.tensor(bbox_img))
+                with torch.no_grad() :
 
-                # hand over to to tensorboard
-                grid_result = torch.stack(bbox_visualization).permute(0,3,1,2)
-                grid = torchvision.utils.make_grid(grid_result)
-                self.logger.experiment.add_image("bbox visualization", grid, self.global_step)
+                    bbox_visualization = []
+
+                    # visualization
+                    for img, p in zip(img_batch, pred) :
+                        bboxes = convert_labelgrid(p, anchorbox = self.anchorbox, num_classes=self.num_classes)
+                        bboxes_after_nms = nms(bboxes, confidence_threshold = 0.3, iou_threshold = 0.8)
+                        
+                        bbox_img = drawboxes(img, bboxes_after_nms)
+                        bbox_visualization.append(torch.tensor(bbox_img))
+
+                    # hand over to to tensorboard
+                    grid_result = torch.stack(bbox_visualization).permute(0,3,1,2)
+                    grid = torchvision.utils.make_grid(grid_result)
+                    self.logger.experiment.add_image("bbox visualization", grid, self.global_step)
 
 
         return loss

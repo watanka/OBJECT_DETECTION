@@ -15,6 +15,10 @@ import albumentations as A
 
 import pytorch_lightning as pl
 
+import sys
+sys.path.append('../')
+from global_utils import IoU, IoU_width_height
+
 classes = [
     "traffic sign",
     "traffic light",
@@ -54,9 +58,10 @@ class BDDDataModule(pl.LightningDataModule) :
         self.predict_imgdir = cfg.dataset.predict.imgdir
         self.predict_jsonfile = cfg.dataset.predict.jsonfile
 
-        self.num_grid = cfg.model.num_grid
+        self.multiscales = cfg.model.multiscales
         self.num_classes = cfg.model.num_classes
         self.anchorbox = cfg.model.anchorbox
+        self.ignore_iou_thresh = cfg.model.ignore_iou_thresh
 
         self.batch_size = cfg.dataset.batch_size
         self.num_workers = cfg.dataset.num_workers
@@ -68,29 +73,32 @@ class BDDDataModule(pl.LightningDataModule) :
         if stage == 'fit' :
             self.train_dataset = BDDDataset(self.train_imgdir, 
                                             self.train_jsonfile, 
-                                            self.num_grid, 
                                             self.num_classes, 
+                                            self.multiscales,
                                             self.anchorbox, 
+                                            self.ignore_iou_thresh,
                                             is_train = True, transform = self.train_transform)
 
             self.test_dataset = BDDDataset(self.test_imgdir, 
                                             self.test_jsonfile, 
-                                            self.num_grid, 
-                                            self.num_classes, 
+                                            self.num_classes,
+                                            self.multiscales, 
                                             self.anchorbox, 
+                                            self.ignore_iou_thresh,
                                             is_train = True, transform = self.test_transform)
         if stage == 'validate' or stage == 'test' :
             self.test_dataset = BDDDataset(self.test_imgdir, 
                                             self.test_jsonfile, 
-                                            self.num_grid, 
-                                            self.num_classes, 
+                                            self.num_classes,
+                                            self.multiscales, 
                                             self.anchorbox, 
+                                            self.ignore_iou_thresh,
                                             is_train = True, transform = self.test_transform)
         if stage == 'predict' :
             self.predict_dataset = BDDDataset(self.predict_imgdir, 
                                             self.predict_jsonfile, 
-                                            self.num_grid, 
-                                            self.num_classes, 
+                                            self.num_classes,
+                                            self.multiscales, 
                                             self.anchorbox, 
                                             is_train = False, transform = self.predict_transform)
 
@@ -109,7 +117,7 @@ class BDDDataModule(pl.LightningDataModule) :
 
 
 class BDDDataset(Dataset):
-    def __init__(self, imgdir, jsonfile, num_grid, num_classes, anchorbox, is_train = True, transform=None):
+    def __init__(self, imgdir, jsonfile, num_classes, multiscales, anchorbox, ignore_iou_thresh = 0.5, is_train = True, transform=None):
         super().__init__()
         self.imgdir = imgdir
         self.is_train = is_train
@@ -136,10 +144,12 @@ class BDDDataset(Dataset):
             self.imgfiles = glob(os.path.join(self.imgdir,'*.jpg')) + glob(os.path.join(self.imgdir,'*.png'))
             self.imgfiles = self.imgfiles[:20]
 
-
-        self.num_grid = num_grid
         self.num_classes = num_classes
-        self.anchorbox = anchorbox
+        self.multiscales = multiscales
+        self.anchorbox = torch.tensor(anchorbox[0] + anchorbox[1] + anchorbox[2])
+        self.num_anchors = self.anchorbox.shape[0]
+
+        self.ignore_iou_thresh = ignore_iou_thresh
 
         self.transform = transform
 
@@ -161,9 +171,6 @@ class BDDDataset(Dataset):
             for info in json_info:
                 label = info["category"]
                 coord = info["box2d"]
-                # x, y = abs(float(coord['x'])), abs(float(coord['y']))
-                # w, h = float(coord['w']), float(coord['h'])
-
                 x1, y1 = coord["x1"], coord["y1"]
                 x2, y2 = coord["x2"], coord["y2"]
                 label = classes_dict[label]
@@ -178,9 +185,10 @@ class BDDDataset(Dataset):
                 labels = transformed["label"]
 
             H, W = image.shape[1:]
-            label_grid = self.encode(bboxes, labels, H, W)
+            # convert bbox coordinates to yolo format in encode()
+            label_grid_multiscale = self.encode(bboxes, labels, H, W)
 
-            return image.float(), label_grid
+            return image.float(), label_grid_multiscale
 
         else :
             if self.transform:
@@ -193,45 +201,52 @@ class BDDDataset(Dataset):
         return len(self.imgfiles)
 
     def encode(self, bboxes, labels, H, W):
-        # yolov2 update : (num_grid, num_grid, anchorbox * (x,y,w,h,pr(obj), num_classes)). each anchor box predicts separate class
-        # yolov2 update : separate array for each anchor box
-        label_grid = np.zeros(
-            (self.num_grid, self.num_grid, len(self.anchorbox), 5 + self.num_classes ), np.float32,)
-        
-        grid_idxbox = np.zeros((self.num_grid, self.num_grid), np.uint8)
 
+        # for different 3 scales, each has 3 x gridsize x gridsize x (pr(obj), x,y,w,h,label)
+        targets = [torch.zeros(self.num_anchors // len(multiscales), S, S, 6) for S in self.multiscales]
         for bbox, label in zip(bboxes, labels):
-
+            
             x1, y1, x2, y2 = bbox
             label = int(label)
             # convert pascal_voc to yolo format
             w = (x2 - x1)
             h = (y2 - y1)
-            x_center = x1 + w / 2
-            y_center = y1 + h / 2
+            x_center = (x1 + w / 2) / W
+            y_center = (y1 + h / 2) / H
 
             w /= W
             h /= H
 
             assert H == W, f"yolov2 takes only square image size. H = {H}, W = {W}"
-            gridsize = 1 / self.num_grid
 
-            # there are cases center of bbox located at the endpoint
-            grid_xidx = min(max(0, int(x_center // gridsize)), self.num_grid - 1)  
-            grid_yidx = min(max(0, int(y_center // gridsize)), self.num_grid - 1)
 
-            # yolov2 normalize x,y respect to image size
-            normalized_x = x_center / W
-            normalized_y = y_center / H
 
-            boxnum = grid_idxbox[grid_yidx][grid_xidx]
-            if boxnum < len(self.anchorbox) : # if total number of boxes exceeds len(anchorbox), then ignore.
-                label_grid[grid_yidx, grid_xidx, boxnum, :5] = [1, normalized_x, normalized_y, w, h]
-                label_grid[grid_yidx, grid_xidx, boxnum, 5 + label] = 1
+            iou_anchors = IoU_width_height(torch.tensor([w, h]), self.anchorbox)
+            anchor_indices = iou_anchors.argsort(descending = True, dim = 0)
+            has_anchor = [False] * 3 # each scale should have one anchor            
+            for anchor_idx in anchor_indices :
+                scale_idx = anchor_idx // len(self.multiscales)
+                anchor_on_scale = anchor_idx % len(self.multiscales)
+                S = self.multiscales[scale_idx]
+                j, i = int(S * y), int(S * x)
+                anchor_taken = targets[scale_idx][anchor_on_scale, j, i, 0]
+                if not anchor_taken and not has_anchor[scale_idx] :
+                    targets[scale_idx][anchor_on_scale, j, i, 0] = 1
+                    x_cell, y_cell = S * x - i, S * y - j
+                    width_cell, height_cell = (
+                        w * S,
+                        h * S
+                    )
+                    box_coordinates = torch.tensor([x_cell, y_cell, width_cell, height_cell])
+                    targets[scale_idx][anchor_on_scale, j, i, 1:5] = box_coordinates
+                    targets[scale_idx][anchor_on_scale, j, i, 5] = label
+                    has_anchor[scale_idx] = True
 
-                grid_idxbox[grid_yidx][grid_xidx] += 1
+                elif not anchor_taken and iou_anchors[anchor_idx] > self.ignore_iou_thresh :
+                    targets[scale_idx][anchor_on_scale, j, i, 0] = -1
             
-        return np.float32(label_grid)
+            
+        return tuple(targets)
 
 
 if __name__ == '__main__' :
