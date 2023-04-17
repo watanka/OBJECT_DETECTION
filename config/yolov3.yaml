@@ -1,0 +1,6 @@
+
+defaults:
+  - model : yolov3
+  - dataset : BDD
+  - aug : yolov1
+  - schedule : yolov3

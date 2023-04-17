@@ -16,8 +16,8 @@ from torchmetrics.detection.mean_ap import MeanAveragePrecision
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 
-from loss import YOLOv2loss
-from utils import convert_labelgrid, decode_labelgrid
+from loss import YOLOv3loss
+from utils import  decode_labelgrid
 import sys
 
 sys.path.append("../")
@@ -68,8 +68,8 @@ class CNNBlock(nn.Module):
         self.use_bn_act = bn_act
 
     def forward(self, x):
-        if self.bn_act :
-            return self.leaky(self.bn(self.conv(x)))
+        if self.use_bn_act :
+            return self.leakyrelu(self.bn(self.conv(x)))
         else :
             return self.conv(x)
 
@@ -80,7 +80,7 @@ class ResidualBlock(nn.Module) :
         for repeat in range(num_repeats) :
             self.layers += [
                 nn.Sequential(
-                    CNNBlock(channels, channels//2, kerne_size = 1),
+                    CNNBlock(channels, channels//2, kernel_size = 1),
                     CNNBlock(channels//2, channels, kernel_size = 3, padding = 1)
                 )
             ]
@@ -97,24 +97,26 @@ class ResidualBlock(nn.Module) :
 class ScalePrediction(nn.Module) :
     def __init__(self, in_channels, num_classes) :
         super().__init__()
-        self.pred = nn.Sequential([
+        self.pred = nn.Sequential(
             CNNBlock(in_channels, 2*in_channels, kernel_size = 3, padding = 1),
-            CNNBlock(2 * in_channels, (num_classes + 5) * 3, bn_act = False, kerne_size = 1)
-        ])
+            CNNBlock(2 * in_channels, (num_classes + 5) * 3, bn_act = False, kernel_size = 1)
+        )
         self.num_classes = num_classes
 
     def forward(self, x) :
         return (
             self.pred(x)
             .reshape(x.shape[0], 3, self.num_classes + 5, x.shape[2], x.shape[3])
-            .permute(0, 1, 3, 4, 2) # batch_size, numgrid, numgrid, 3, num_classes + 5
+            .permute(0, 1, 3, 4, 2) # batch_size, 3, numgrid, numgrid, num_classes + 5
         )
 
 class Yolov3(pl.LightningModule):
     def __init__(self, in_channels, multiscales, anchorbox, num_classes):
-        super(Yolov2, self).__init__()
-        self.register_buffer('anchorbox', torch.tensor(anchorbox))
+        super(Yolov3, self).__init__()
+
         self.multiscales = multiscales
+        scaled_anchorbox = torch.tensor(anchorbox) * (torch.tensor(multiscales)[..., None, None].repeat(1, 3, 2))
+        self.register_buffer('anchorbox', scaled_anchorbox)
         self.numbox = len(self.anchorbox) // len(self.multiscales)
         self.num_classes = num_classes
 
@@ -123,12 +125,14 @@ class Yolov3(pl.LightningModule):
         self.layers = self._create_conv_layers(self.architecture)
 
         
-        self.yolo_loss = YOLOv2loss(
-            lambda_coord=5,
-            lambda_noobj=0.5,
-            anchorbox=self.anchorbox,
-            num_classes = self.num_classes,
-            device = self.device
+        print('anchor box', self.anchorbox)
+
+
+        self.yolo_loss = YOLOv3loss(
+            lambda_class = 1,
+            lambda_obj = 10,
+            lambda_noobj = 1,
+            lambda_coord = 10,
         )
 
         self.mAP = MeanAveragePrecision(
@@ -173,8 +177,8 @@ class Yolov3(pl.LightningModule):
                     CNNBlock(
                             in_channels, 
                             out_channels,
-                            kernel_size,
-                            strid = stride,
+                            kernel_size = kernel_size,
+                            stride = stride,
                             padding = 1 if kernel_size == 3 else 0 
                             )
                         )
@@ -189,7 +193,7 @@ class Yolov3(pl.LightningModule):
                     layers += [
                         ResidualBlock(in_channels, use_residual= False, num_repeats= 1),
                         CNNBlock(in_channels, in_channels//2, kernel_size = 1),
-                        ScalePrediction(in_channels // 2 , num_classes = num_classes)
+                        ScalePrediction(in_channels // 2 , num_classes = self.num_classes)
                     ]
                     in_channels = in_channels//2
                 elif module == 'U' :
@@ -200,7 +204,7 @@ class Yolov3(pl.LightningModule):
 
         
     def configure_optimizers(self):
-        optimizer = optim.Adam(self.parameters(), lr=1e-3, weight_decay = 5e-4, momentum = 0.9)
+        optimizer = optim.Adam(self.parameters(), lr=1e-3, weight_decay = 5e-4)
 
         '''
         135 epochs 중에서 
@@ -227,35 +231,40 @@ class Yolov3(pl.LightningModule):
         img_batch, label_grid = batch
         pred_multiscales = self.forward(img_batch)
 
+        losses = []
+        mean_loss = 0
 
         for scale_idx in range(len(self.multiscales)) :
-            ## TODO 
-            pred = pred_multiscales[scale_idx].contiguous().reshape(-1, self.num_grid, self.num_grid, self.numbox, (5 + self.num_classes))
+            pred = pred_multiscales[scale_idx].contiguous().reshape(-1,  self.numbox, self.multiscales[scale_idx], self.multiscales[scale_idx], (5 + self.num_classes))
 
-            loss = self.yolo_loss(pred, label_grid)
-            self.log("train_loss", loss)
+            loss = self.yolo_loss(predictions = pred, target = label_grid[scale_idx], anchors = self.anchorbox[scale_idx])
 
-            if batch_idx % 100 == 0 :
+            losses.append(loss.item())      
 
-                with torch.no_grad() :
+        mean_loss = sum(losses) / len(losses)
+            
+        self.log("train_loss", mean_loss)
+        if batch_idx % 100 == 0 :
 
-                    bbox_visualization = []
+            with torch.no_grad() :
 
-                    # visualization
-                    for img, p in zip(img_batch, pred) :
-                        bboxes = convert_labelgrid(p, anchorbox = self.anchorbox, num_classes=self.num_classes)
-                        bboxes_after_nms = nms(bboxes, confidence_threshold = 0.3, iou_threshold = 0.8)
-                        
-                        bbox_img = drawboxes(img, bboxes_after_nms)
-                        bbox_visualization.append(torch.tensor(bbox_img))
+                bbox_visualization = []
 
-                    # hand over to to tensorboard
-                    grid_result = torch.stack(bbox_visualization).permute(0,3,1,2)
-                    grid = torchvision.utils.make_grid(grid_result)
-                    self.logger.experiment.add_image("bbox visualization", grid, self.global_step)
+                # visualization
+                for img, p in zip(img_batch, pred) :
+                    bboxes = decode_labelgrid(p, anchors = self.anchorbox, S = S, is_preds = True)
+                    bboxes_after_nms = nms(bboxes, confidence_threshold = 0.3, iou_threshold = 0.8)
+                    
+                    bbox_img = drawboxes(img, bboxes_after_nms)
+                    bbox_visualization.append(torch.tensor(bbox_img))
+
+                # hand over to to tensorboard
+                grid_result = torch.stack(bbox_visualization).permute(0,3,1,2)
+                grid = torchvision.utils.make_grid(grid_result)
+                self.logger.experiment.add_image("bbox visualization", grid, self.global_step)
 
 
-        return loss
+        return mean_loss
 
     def get_predgt(self, pred_bboxes, gt_bboxes) :
         '''
@@ -296,21 +305,33 @@ class Yolov3(pl.LightningModule):
         ### 100번마다 한 번씩만 validation 스코어 업데이트
         if batch_idx % 100 == 0 :
             img_batch, label_grid_batch = batch
-            pred = self.forward(img_batch)
-            pred = pred.contiguous().reshape(-1, self.num_grid, self.num_grid, self.numbox, (5 + self.num_classes))
+            pred_multiscales = self.forward(img_batch)
             
+            losses = []
+            pred_bboxes_list = []
+            mean_loss = 0
 
-            loss = self.yolo_loss(pred, label_grid_batch)
-            self.log("val_loss", loss)
+            for scale_idx in range(len(self.multiscales)) :
+                pred = pred_multiscales[scale_idx].contiguous().reshape(-1,  self.numbox, self.multiscales[scale_idx], self.multiscales[scale_idx],  (5 + self.num_classes))
+
+                pred_bboxes = decode_labelgrid(pred, anchors = self.anchorbox[scale_idx], S = self.multiscales[scale_idx], is_preds = True)
+                pred_bboxes_list.append(pred_bboxes)
+                loss = self.yolo_loss(predictions = pred, target = label_grid[scale_idx], anchors = self.anchorbox[scale_idx])
+
+                losses.append(loss.item())      
+
+            mean_loss = sum(losses) / len(losses)
+
+            self.log("val_loss", mean_loss)
 
             with torch.no_grad() :
 
                 bbox_visualization = []
-                # for loop by batch
-                for img, gt_labelgrid, p in zip(img_batch, label_grid_batch, pred) :
 
-                    pred_bboxes = convert_labelgrid(p, anchorbox = self.anchorbox, num_classes=self.num_classes)
-                    pred_bboxes_after_nms = nms(pred_bboxes, confidence_threshold = 0.3, iou_threshold = 0.8)
+                # for loop by batch
+                for batch_idx, (img, gt_labelgrid) in enumerate(zip(img_batch, label_grid_batch)) :
+                
+                    pred_bboxes_after_nms = nms(pred_bboxes_list[batch_idx], confidence_threshold = 0.3, iou_threshold = 0.8)
                     
                     gt_bboxes = torch.tensor(decode_labelgrid(gt_labelgrid, self.anchorbox, self.num_classes))
 
@@ -337,7 +358,7 @@ class Yolov3(pl.LightningModule):
 
     def predict_step(self, img_batch, batch_idx):
         pred = self.forward(img_batch)
-        pred = pred.contiguous().reshape(-1, self.num_grid, self.num_grid, self.numbox, (5 + self.num_classes))
+        
         
         with torch.no_grad() :
 
@@ -345,7 +366,7 @@ class Yolov3(pl.LightningModule):
             bboxes_batches = []
             # visualization
             for p, img in zip(pred, img_batch) :
-                bboxes = convert_labelgrid(p, anchorbox = self.anchorbox, num_classes=self.num_classes)
+                bboxes = decode_labelgrid(p, anchorbox = self.anchorbox, num_classes=self.num_classes)
                 bboxes_after_nms = nms(bboxes, confidence_threshold = 0.3, iou_threshold = 0.8)
                 
                 bbox_img = drawboxes(img, bboxes_after_nms)

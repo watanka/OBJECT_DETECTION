@@ -222,7 +222,7 @@ class BDDDataset(Dataset):
 
             # yolov2 normalize x,y respect to image size
             normalized_x = x_center / W
-            normalized_y = y_center / H
+            normalized_y = y_center/ H
 
             boxnum = grid_idxbox[grid_yidx][grid_xidx]
             if boxnum < len(self.anchorbox) : # if total number of boxes exceeds len(anchorbox), then ignore.

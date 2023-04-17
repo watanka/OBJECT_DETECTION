@@ -203,7 +203,7 @@ class BDDDataset(Dataset):
     def encode(self, bboxes, labels, H, W):
 
         # for different 3 scales, each has 3 x gridsize x gridsize x (pr(obj), x,y,w,h,label)
-        targets = [torch.zeros(self.num_anchors // len(multiscales), S, S, 6) for S in self.multiscales]
+        targets = [torch.zeros(self.num_anchors // len(self.multiscales), S, S, 6) for S in self.multiscales]
         for bbox, label in zip(bboxes, labels):
             
             x1, y1, x2, y2 = bbox
@@ -225,14 +225,14 @@ class BDDDataset(Dataset):
             anchor_indices = iou_anchors.argsort(descending = True, dim = 0)
             has_anchor = [False] * 3 # each scale should have one anchor            
             for anchor_idx in anchor_indices :
-                scale_idx = anchor_idx // len(self.multiscales)
-                anchor_on_scale = anchor_idx % len(self.multiscales)
+                scale_idx = int(anchor_idx // len(self.multiscales))
+                anchor_on_scale = int(anchor_idx % len(self.multiscales))
                 S = self.multiscales[scale_idx]
-                j, i = int(S * y), int(S * x)
+                j, i = int(S * y_center), int(S * x_center)
                 anchor_taken = targets[scale_idx][anchor_on_scale, j, i, 0]
                 if not anchor_taken and not has_anchor[scale_idx] :
                     targets[scale_idx][anchor_on_scale, j, i, 0] = 1
-                    x_cell, y_cell = S * x - i, S * y - j
+                    x_cell, y_cell = S * x_center - i, S * y_center - j
                     width_cell, height_cell = (
                         w * S,
                         h * S
@@ -243,7 +243,7 @@ class BDDDataset(Dataset):
                     has_anchor[scale_idx] = True
 
                 elif not anchor_taken and iou_anchors[anchor_idx] > self.ignore_iou_thresh :
-                    targets[scale_idx][anchor_on_scale, j, i, 0] = -1
+                    targets[scale_idx][anchor_on_scale, j, i, 0] = -1 # ignore
             
             
         return tuple(targets)

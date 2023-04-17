@@ -3,7 +3,7 @@ from omegaconf import DictConfig
 import logging
 import os
 
-from model import Yolov2
+from model import Yolov3
 from data import BDDDataset, BDDDataModule
 
 
@@ -32,15 +32,17 @@ log = logging.getLogger(__name__)
 
 
 
-@hydra.main(config_path = '../config', config_name = 'yolov2')
+@hydra.main(config_path = '../config', config_name = 'yolov3')
 def train(cfg : DictConfig) -> None :
 
+    scale = 1.1
     train_transform = A.Compose(
-    [   A.Normalize(), # mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)
+    [   
+        A.Normalize(mean = [0,0,0], std = [1,1,1], max_pixel_value = 255),
         A.geometric.resize.RandomScale(scale_limit=cfg.aug.scale_limit),
         A.geometric.transforms.Affine(translate_percent = [cfg.aug.translation, cfg.aug.translation]), 
-        A.geometric.resize.SmallestMaxSize(max_size=cfg.model.img_size),
-        A.transforms.ColorJitter(brightness = cfg.aug.brightness, saturation = cfg.aug.saturation), 
+        A.geometric.resize.SmallestMaxSize(max_size=int(scale * cfg.model.img_size)),
+        A.transforms.ColorJitter(brightness = cfg.aug.brightness, contrast = 0.6, saturation = cfg.aug.saturation, hue = 0.6, p = 0.6), 
         A.RandomCrop(width=cfg.model.img_size, height=cfg.model.img_size, always_apply=True, p=1.0),
         A.PadIfNeeded(min_width=cfg.model.img_size, min_height=cfg.model.img_size, border_mode=None), 
         pytorch.transforms.ToTensorV2(),
@@ -77,10 +79,10 @@ def train(cfg : DictConfig) -> None :
                                 predict_transform = predict_transform
                                 )
 
-    model = Yolov2(in_channels = 3, num_grid= cfg.model.num_grid, anchorbox=cfg.model.anchorbox, num_classes=cfg.model.num_classes)            
+    model = Yolov3(in_channels = 3, multiscales= cfg.model.multiscales, anchorbox=cfg.model.anchorbox, num_classes=cfg.model.num_classes)            
     
     ## logger
-    tb_logger = TensorBoardLogger(save_dir = os.path.join(os.getcwd(), 'tensorboard/') , name = 'yolov2', version = '0')
+    tb_logger = TensorBoardLogger(save_dir = os.path.join(os.getcwd(), 'tensorboard/') , name = 'yolov3', version = '0')
     # print(f'Model weight will be saved with tensorboard logger {tb_logger.save_dir}.')
     ckptCallback = ModelCheckpoint(dirpath = tb_logger.save_dir, 
                                    filename = cfg.schedule.savefile_format,
@@ -95,7 +97,7 @@ def train(cfg : DictConfig) -> None :
     trainer.fit(
         model=model, datamodule= datamodule)
 
-@hydra.main(config_path = '../config', config_name = 'yolov2')
+@hydra.main(config_path = '../config', config_name = 'yolov3')
 def validate(cfg : DictConfig) -> None :
     train_transform = A.Compose(
     [   A.Normalize(), # mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)
@@ -139,7 +141,7 @@ def validate(cfg : DictConfig) -> None :
                                 predict_transform = predict_transform
                                 )
 
-    model = Yolov2(in_channels = 3, num_grid= cfg.model.num_grid, numbox=cfg.model.numbox, num_classes=cfg.model.num_classes)            
+    model = Yolov3(in_channels = 3, multiscales= cfg.model.multiscales, anchorbox=cfg.model.anchorbox, num_classes=cfg.model.num_classes)            
     
     ## logger
     tb_logger = TensorBoardLogger(save_dir = os.path.join(os.getcwd(), 'tensorboard/') , name = 'yolov1')
