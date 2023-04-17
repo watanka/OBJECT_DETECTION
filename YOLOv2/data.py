@@ -95,7 +95,10 @@ class BDDDataModule(pl.LightningDataModule) :
                                             is_train = False, transform = self.predict_transform)
 
     def train_dataloader(self) :
-        return DataLoader(self.train_dataset, batch_size = self.batch_size, num_workers = self.num_workers)
+        return DataLoader(self.train_dataset, 
+                          shuffle = True,
+                          batch_size = self.batch_size, 
+                          num_workers = self.num_workers)
     def val_dataloader(self) :
         return DataLoader(self.test_dataset, batch_size = self.batch_size, num_workers = self.num_workers)
     def test_dataloader(self) :
@@ -131,7 +134,7 @@ class BDDDataset(Dataset):
         else :
             # predict, test => No Label
             self.imgfiles = glob(os.path.join(self.imgdir,'*.jpg')) + glob(os.path.join(self.imgdir,'*.png'))
-
+            self.imgfiles = self.imgfiles[:20]
 
 
         self.num_grid = num_grid
@@ -204,8 +207,8 @@ class BDDDataset(Dataset):
             # convert pascal_voc to yolo format
             w = (x2 - x1)
             h = (y2 - y1)
-            x_center = (x1 + w / 2) / W
-            y_center = (y1 + h / 2) / H
+            x_center = x1 + w / 2
+            y_center = y1 + h / 2
 
             w /= W
             h /= H
@@ -219,7 +222,7 @@ class BDDDataset(Dataset):
 
             # yolov2 normalize x,y respect to image size
             normalized_x = x_center / W
-            normalized_y = y_center/ H
+            normalized_y = y_center / H
 
             boxnum = grid_idxbox[grid_yidx][grid_xidx]
             if boxnum < len(self.anchorbox) : # if total number of boxes exceeds len(anchorbox), then ignore.
@@ -234,16 +237,57 @@ class BDDDataset(Dataset):
 if __name__ == '__main__' :
     from hydra import compose, initialize
     from omegaconf import OmegaConf
+    from utils import decode_labelgrid
+    import sys
+    sys.path.append('../')
+    from global_utils import drawboxes
+    import albumentations as A
+    import albumentations.pytorch as pytorch
 
     initialize(config_path="../config", job_name="test datamodule")
-    cfg = compose(config_name="../config")
+    cfg = compose(config_name="yolov2")
+    print(cfg)
 
-    datamodule = BDDDataModule(cfg)
+    train_transform = A.Compose(
+    [   
+        # A.Normalize(), # mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)
+        A.geometric.resize.RandomScale(scale_limit=cfg.aug.scale_limit),
+        A.geometric.transforms.Affine(translate_percent = [cfg.aug.translation, cfg.aug.translation]), 
+        A.geometric.resize.SmallestMaxSize(max_size=cfg.model.img_size),
+        # A.transforms.ColorJitter(brightness = cfg.aug.brightness, saturation = cfg.aug.saturation), 
+        A.RandomCrop(width=cfg.model.img_size, height=cfg.model.img_size, always_apply=True, p=1.0),
+        A.PadIfNeeded(min_width=cfg.model.img_size, min_height=cfg.model.img_size, border_mode=None), 
+        pytorch.transforms.ToTensorV2(),
+    ],
+    bbox_params=A.BboxParams(
+        format="pascal_voc", label_fields=["label"], min_visibility=0.8 # bounding box will be changed into yolo format after the encoding
+    ),)
+
+    datamodule = BDDDataModule(cfg, train_transform = train_transform)
 
     datamodule.setup('fit')
 
     train_dataloader = datamodule.train_dataloader()
 
     img_batch, label_batch = next(iter(train_dataloader))
+
+    def write_txt(bboxes, fname) :
+        with open(fname, 'w') as f :
+            for bbox in bboxes :
+                bbox = list(map(float, bbox))
+                f.write('\t'.join(map(str, bbox)) + '\n')
+
+
+
+    for idx, (img, label) in enumerate(zip(img_batch, label_batch)) :
+        bboxes = decode_labelgrid(label, cfg.model.anchorbox, cfg.model.num_classes)
+
+        bbox_img = drawboxes(img, bboxes)
+        plt.imsave(f'experiment/check_img{idx}.jpg', bbox_img)
+        fname = f'experiment/check_img{idx}.txt'
+        write_txt(bboxes, fname)
+
+
+
 
     
