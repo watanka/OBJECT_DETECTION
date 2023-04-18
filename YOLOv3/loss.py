@@ -30,13 +30,13 @@ class YOLOv3loss(nn.Module):
 
         # No object loss
         no_object_loss = self.BCEloss(
-            (predictions[..., 0:1][noobj], target[..., 0:1][noobj])
+            predictions[..., 0:1][noobj], target[..., 0:1][noobj]
         )
         # Object loss
         anchors = anchors.reshape(1, 3, 1, 1, 2) # p_w * exp(t_w)
         box_preds = torch.cat([self.sigmoid(predictions[..., 1:3]), torch.exp(predictions[..., 3:5]) * anchors], dim = -1)
         ious = IoU(box_preds[obj], target[..., 1:5][obj]).detach()
-        object_loss = self.bce( predictions[..., 0:1][obj], (ious * target[..., 0:1][obj]))
+        object_loss = self.BCEloss( predictions[..., 0:1][obj], (ious * target[..., 0:1][obj]))
 
         
         # Box Coordinate Loss

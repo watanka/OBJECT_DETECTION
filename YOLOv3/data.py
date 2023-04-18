@@ -203,7 +203,7 @@ class BDDDataset(Dataset):
     def encode(self, bboxes, labels, H, W):
 
         # for different 3 scales, each has 3 x gridsize x gridsize x (pr(obj), x,y,w,h,label)
-        targets = [torch.zeros(self.num_anchors // len(self.multiscales), S, S, 6) for S in self.multiscales]
+        targets = [torch.zeros(self.num_anchors // len(self.multiscales), S, S, 6, dtype = torch.float32) for S in self.multiscales]
         for bbox, label in zip(bboxes, labels):
             
             x1, y1, x2, y2 = bbox
@@ -260,7 +260,7 @@ if __name__ == '__main__' :
     import albumentations.pytorch as pytorch
 
     initialize(config_path="../config", job_name="test datamodule")
-    cfg = compose(config_name="yolov2")
+    cfg = compose(config_name="yolov3")
     print(cfg)
 
     train_transform = A.Compose(
@@ -293,14 +293,31 @@ if __name__ == '__main__' :
                 f.write('\t'.join(map(str, bbox)) + '\n')
 
 
+    anchorbox = cfg.model.anchorbox
 
-    for idx, (img, label) in enumerate(zip(img_batch, label_batch)) :
-        bboxes = decode_labelgrid(label, cfg.model.anchorbox, cfg.model.num_classes)
+    anchorbox = torch.tensor(anchorbox) * (torch.tensor(cfg.model.multiscales)[..., None, None].repeat(1, 3, 2))
+    print(anchorbox.shape)
+    # print('label : ', label_batch.shape)
 
-        bbox_img = drawboxes(img, bboxes)
+    batch_size = img_batch.shape[0]
+    bboxes_list = [[] for batch_idx in range(batch_size)]
+
+    for scale_idx in range(len(cfg.model.multiscales)) :
+        bboxes = decode_labelgrid(label_batch[scale_idx], anchorbox[scale_idx], cfg.model.multiscales[scale_idx], is_preds = False)
+        for batch_idx in range(batch_size) :
+            bboxes_list[batch_idx] += bboxes[batch_idx]
+    
+    
+    
+
+
+    print(np.array(bboxes_list).shape)
+    # print(bboxes_list)
+    for idx, (img, label) in enumerate(zip(img_batch, label_batch)) :    
+        bbox_img = drawboxes(img, bboxes_list[idx], confidence_threshold = 0.8)
         plt.imsave(f'experiment/check_img{idx}.jpg', bbox_img)
         fname = f'experiment/check_img{idx}.txt'
-        write_txt(bboxes, fname)
+        write_txt(bboxes_list[idx], fname)
 
 
 

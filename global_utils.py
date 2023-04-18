@@ -63,7 +63,7 @@ classes = ['traffic sign', 'traffic light', 'car', 'rider', 'motorcycle', 'pedes
 classes_dict = {c : i for i, c in enumerate(classes)}
 label_dict = {num : clsname for clsname, num in classes_dict.items()}
 
-def visualize_bbox(img, bbox, color=BOX_COLOR, thickness=1):
+def visualize_bbox(img, bbox, confidence_threshold = 0.8, color=BOX_COLOR, thickness=1):
     """
     bbox = [pred_cls, x, y, w, h, confidence_score]
     Visualizes a single bounding box on the image
@@ -73,29 +73,29 @@ def visualize_bbox(img, bbox, color=BOX_COLOR, thickness=1):
 
     confidence_score, x, y, w, h, pred_cls = map(float, bbox)
     pred_cls = int(pred_cls)
-    
-    x_min, x_max, y_min, y_max = x - w/2, x + w/2, y - h/2, y + h/2
-    x_min = int(img_w * x_min)
-    x_max = int(img_w * x_max)
-    y_min = int(img_h * y_min)
-    y_max = int(img_h * y_max)
+    if confidence_score >= confidence_threshold :
+        x_min, x_max, y_min, y_max = x - w/2, x + w/2, y - h/2, y + h/2
+        x_min = int(img_w * x_min)
+        x_max = int(img_w * x_max)
+        y_min = int(img_h * y_min)
+        y_max = int(img_h * y_max)
 
-    cv2.rectangle(img, (x_min, y_min), (x_max, y_max), color=color, thickness=thickness)
-    
-    ((text_width, text_height), _) = cv2.getTextSize(label_dict[pred_cls], cv2.FONT_HERSHEY_SIMPLEX, 0.35, 1)    
-    cv2.rectangle(img, (x_min, y_min - int(1.3 * text_height)), (x_min + text_width, y_min), BOX_COLOR, -1)
-    cv2.putText(
-        img,
-        text=label_dict[pred_cls],
-        org=(x_min, y_min - int(0.3 * text_height)),
-        fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-        fontScale=0.35, 
-        color=TEXT_COLOR, 
-        lineType=cv2.LINE_AA,
-    )
+        cv2.rectangle(img, (x_min, y_min), (x_max, y_max), color=color, thickness=thickness)
+        
+        ((text_width, text_height), _) = cv2.getTextSize(label_dict[pred_cls], cv2.FONT_HERSHEY_SIMPLEX, 0.35, 1)    
+        cv2.rectangle(img, (x_min, y_min - int(1.3 * text_height)), (x_min + text_width, y_min), BOX_COLOR, -1)
+        cv2.putText(
+            img,
+            text=label_dict[pred_cls],
+            org=(x_min, y_min - int(0.3 * text_height)),
+            fontFace=cv2.FONT_HERSHEY_SIMPLEX,
+            fontScale=0.35, 
+            color=TEXT_COLOR, 
+            lineType=cv2.LINE_AA,
+        )
     return img
 
-def drawboxes(img, bboxes):
+def drawboxes(img, bboxes, confidence_threshold = 0.5):
     if type(img) == torch.Tensor :
         img = img.permute(1,2,0).detach().cpu().numpy()
         img = np.array(img*255., dtype = np.uint8).copy()
@@ -103,7 +103,8 @@ def drawboxes(img, bboxes):
         img = img.copy()
 
     for bbox in bboxes:
-        img = visualize_bbox(img, bbox)
+        # 04/18 : added confidence_threshold variable to filter out empty values with anchorboxes
+        img = visualize_bbox(img, bbox, confidence_threshold = confidence_threshold)
     # plt.figure(figsize=(12, 12))
     # plt.axis('off')
     # plt.imshow(img)
@@ -181,6 +182,7 @@ def nms(predictions, confidence_threshold: float , iou_threshold: float) :
     vectorize nms
     reference : https://blog.roboflow.com/how-to-code-non-maximum-suppression-nms-in-plain-numpy/
     '''
+    predictions = np.array(predictions)
     rows, columns = predictions.shape
 
     sort_index = np.flip(predictions[:,0].argsort())

@@ -24,7 +24,7 @@ def decode_labelgrid(predictions, anchors, S, is_preds = True) :
     x = 1 / S * (box_predictions[..., 0:1] + cell_indices)
     y = 1 / S * (box_predictions[..., 1:2] + cell_indices.permute(0, 1, 3, 2, 4,))
     w_h = 1 / S * box_predictions[..., 2:4]
-    converted_bboxes = torch.cat((best_class, scores, x, y, w_h), dim = -1).reshape(BATCH_SIZE, num_anchors * S * S, 6)
+    converted_bboxes = torch.cat((scores, x, y, w_h, best_class), dim = -1).reshape(BATCH_SIZE, num_anchors * S * S, 6)
     
     return converted_bboxes.tolist()
 
