@@ -140,7 +140,7 @@ class BDDDataset(Dataset):
 
     def __getitem__(self, idx):
         imgfile = self.imgfiles[idx]
-        image = cv2.imread(imgfile) #/ 255.0
+        image = cv2.imread(imgfile)
 
         if self.is_train :
             json_info = self.json_infos[idx]
@@ -163,12 +163,7 @@ class BDDDataset(Dataset):
                 x2, y2 = coord["x2"], coord["y2"]
                 label = classes_dict[label]
 
-                # bbox_albu = A.core.bbox_utils.convert_bbox_from_albumentations(np.array([x1, y1, x2, y2, label]), target_format='yolo', rows=HEIGHT, cols=WIDTH, check_validity= False)
-                # print('bbox_albu : ', np.array(bbox_albu))
-                # bbox_yolo = A.core.bbox_utils.convert_bbox_from_albumentations(np.array(bbox_albu), target_format='yolo', rows=HEIGHT, cols=WIDTH, check_validity=False)
-                # print('bbox_yolo : ', bbox_yolo)
 
-                # bboxes.append([x,y,w,h])
                 bboxes.append([x1, y1, x2, y2])
                 labels.append(label)
 
@@ -196,7 +191,7 @@ class BDDDataset(Dataset):
     def encode(self, bboxes, labels, H, W):
         label_grid = np.zeros(
             (self.num_grid, self.num_grid, self.numbox * 5 + self.num_classes),
-            np.float64,
+            np.float32,
         )
         grid_idxbox = np.zeros((self.num_grid, self.num_grid), np.uint8)
         # grid cell당 하나의 class만 포함할 수 있다. 이미 grid안에 label값이 들어가있다면, continue.
