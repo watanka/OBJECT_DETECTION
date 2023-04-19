@@ -54,6 +54,45 @@ def IoU(box1, box2) :
 
     return area_inter / (box1_area + box2_area - area_inter + 1e-9)
 
+def vectorized_IoU(boxes_a, boxes_b) :
+    '''
+    reference : https://blog.roboflow.com/how-to-code-non-maximum-suppression-nms-in-plain-numpy/
+    vectorized IoU. calculate IoU for list of boxes_a with list of boxes_b.
+    adding None between the dimension is the kick.
+    '''
+    def box_area(box) :
+        return box[2] * box[3]
+
+    area_a = box_area(boxes_a.T)
+    area_b = box_area(boxes_b.T)
+    
+    boxes_a_xmin = boxes_a[..., 0:1] - boxes_a[..., 2:3] / 2
+    boxes_a_xmax = boxes_a[..., 0:1] + boxes_a[..., 2:3] / 2
+    boxes_a_ymin = boxes_a[..., 1:2] - boxes_a[..., 3:4] / 2
+    boxes_a_ymax = boxes_a[..., 1:2] + boxes_a[..., 3:4] / 2
+
+    boxes_b_xmin = boxes_b[..., 0:1] - boxes_b[..., 2:3] / 2
+    boxes_b_xmax = boxes_b[..., 0:1] + boxes_b[..., 2:3] / 2
+    boxes_b_ymin = boxes_b[..., 1:2] - boxes_b[..., 3:4] / 2
+    boxes_b_ymax = boxes_b[..., 1:2] + boxes_b[..., 3:4] / 2
+
+    boxes_a_topleft = np.concatenate([boxes_a_xmin, boxes_a_ymin], axis = -1)
+    boxes_a_bottomright = np.concatenate([boxes_a_xmax, boxes_a_ymax], axis = -1)
+
+    boxes_b_topleft = np.concatenate([boxes_b_xmin, boxes_b_ymin], axis = -1)
+    boxes_b_bottomright = np.concatenate([boxes_b_xmax, boxes_b_ymax], axis = -1)
+    
+    top_left = np.maximum(boxes_a_topleft[..., None, :], boxes_b_topleft )
+    bottom_right = np.minimum(boxes_a_bottomright[..., None, :], boxes_b_bottomright)
+
+    area_inter = np.prod(
+        np.clip(bottom_right - top_left, a_min = 0, a_max = None), -1
+    )
+
+    return area_inter / (area_a[..., None] + area_b - area_inter )
+
+
+
 
 
 BOX_COLOR = (255, 0, 0) # Red
@@ -142,7 +181,38 @@ def visualize_gridbbox(img, label_grid, numBox = 2, color = BOX_COLOR, thickness
     return copy_img
     
 
+# ## Not same as the original function
+# def soft_nms(predictions, confidence_threshold, sigma = 0.5) :
+#     '''
+#     NMS switch out the confidence scores of others with above iou_threshold to zeros, in respect to one argmax value.
+#     soft NMS suggests that the confidence scores of others with above iou_threshold should be changed relatively to IoU with the argmax value.
+#     vectorize soft_nms
+#     reference : https://blog.roboflow.com/how-to-code-non-maximum-suppression-nms-in-plain-numpy/
+#     weight confidence scores with overlapped boxes
+#     '''
+#     predictions = np.array(predictions)
+#     rows, columns = predictions.shape
+#     assert columns == 6, 'bbox should contain [confidence_score, x_center, y_center, w, h, pred_class]'
     
+#     sort_index = np.flip(predictions[:,0].argsort())
+#     predictions = predictions[sort_index]
+
+#     boxes = predictions[:, 1:5]
+#     categories = predictions[:, -1]
+#     ious = vectorized_IoU(torch.tensor(boxes), torch.tensor(boxes)).detach().cpu().numpy()
+#     ious = ious - np.eye(rows)
+    
+
+#     weight = np.exp(- np.tril(ious) ** 2 / sigma)
+#     confidence_weight = np.multiply.reduce(weight, -1)
+#     predictions[..., 0] *= confidence_weight
+
+#     keep = predictions[..., 0] > confidence_threshold
+
+#     return predictions[keep]
+
+
+
     
 # def nms(bboxes, threshold, iou_threshold) :
 #     '''
@@ -190,7 +260,7 @@ def nms(predictions, confidence_threshold: float , iou_threshold: float) :
 
     boxes = predictions[:, 1:5]
     categories = predictions[:, -1]
-    ious = IoU(torch.tensor(boxes), torch.tensor(boxes)).detach().cpu().numpy()
+    ious = vectorized_IoU(torch.tensor(boxes), torch.tensor(boxes)).detach().cpu().numpy()
     ious = ious - np.eye(rows)
     keep = predictions[:, 0] > confidence_threshold # np.ones(rows, dtype = bool)
 
