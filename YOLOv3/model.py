@@ -349,10 +349,9 @@ class Yolov3(pl.LightningModule):
 
 
     def predict_step(self, img_batch, batch_idx):
-        pred = self.forward(img_batch)
-        
-        pred_bboxes_list = self.convert_bboxes(pred) 
-        pred_bboxes_list = self.convert_bboxes(pred_multiscales)
+        pred_multiscales = self.forward(img_batch)
+
+        pred_bboxes_list = self.convert_bboxes(pred_multiscales) 
         pred_bboxes_after_nms = [nms(bboxes, confidence_threshold = 0.5, iou_threshold = 0.8) for bboxes in pred_bboxes_list]
 
         bbox_visualization = []

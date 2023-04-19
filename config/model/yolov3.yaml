@@ -10,3 +10,5 @@ img_size: 416
 confidence_threshold: 0.5
 iou_threshold : 0.8
 ignore_iou_thresh : 0.5
+
+checkpoint: '/mnt/c/Users/user/Desktop/projects/object_detection/YOLOv3/outputs/2023-04-18/12-01-48/tensorboard/yolov3-epoch=31-val_loss=13.82.ckpt'
