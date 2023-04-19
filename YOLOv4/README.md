@@ -52,4 +52,17 @@
         - NMS
         - soft NMS : considers the problem that the occlusion of an object may cause the degradation of confidence score in greedy NMS with IoU scores
         - DIoU NMS : add the information of the center point distance to the bbox screening process on the basis of soft NMS
-        
+
+
+
+### Selection
+
+Head  
+- CSPDarkNet53
+Neck  
+- SPP, PAN  
+Head  
+- YOLOv3
+
+
+
