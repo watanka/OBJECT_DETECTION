@@ -1,7 +1,11 @@
+자세한 내용은 블로그에 정리해두었습니다.  
 [blog](https://silvercity.notion.site)
 
 #### reference
+https://arxiv.org/pdf/2304.00501.pdf  
 
+
+![img](img/yolo_timeline.png)  
 
 ### Description
 yoloV1부터 yoloV8까지 직접 구현합니다. 이미 웹에 pytorch로 구현한 코드들이 많이 존재했기 때문에, 최대한 활용은 하였으나, 코드들은 전부 제 이해를 바탕으로 직접 작성한 코드들입니다. 그럼에도 불구하고, 참고한 코드들이 없었다면, 사용가능한 코드까지 끝마치지는 못 했을 거라는 생각이 듭니다.  

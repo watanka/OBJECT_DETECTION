@@ -1,5 +1,9 @@
 ## YOLOv4: Optimal Speed and Accuracy of Object Detection
 
+### model architecture
+![img](../img/yolov4_architecture.png) 
+
+
 #### new features
 - Bag of Freebies
     - Data Augmentation

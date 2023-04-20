@@ -1,5 +1,9 @@
 ## YOLOv3: An Incremental Improvement
 
+### model architecture
+![img](../img/yolov3_architecture.png) 
+
+
 #### new features
 - class prediction, use binary cross-entropy. multi-label
 - predicts boxes at 3 different scales, 3boxes at each scale
