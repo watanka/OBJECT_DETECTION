@@ -58,15 +58,6 @@ architecture_config = [
 
 ]
 
-class SPPBlock(nn.Module) :
-    pass
-
-class ASPPBlock(nn.Module) :
-    pass
-
-class RFB(nn.Module) :
-    pass
-
 
 
 class CNNBlock(nn.Module):
