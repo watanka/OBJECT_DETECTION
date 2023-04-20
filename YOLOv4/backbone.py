@@ -5,7 +5,7 @@ import torch.nn as nn
 
 
 class BaseBlock(nn.Module) :
-    def __init__(self, in_channels, out_channels, kernel_size, stride = 1, padding = 0, act_fn = 'mish') :
+    def __init__(self, in_channels, out_channels, kernel_size = 1, stride = 1, padding = 0, act_fn = 'mish') :
         super().__init__()
         if act_fn.lower() == 'mish' :
             activation = nn.Mish()
@@ -109,7 +109,7 @@ class DarkNet53(nn.Module) :
     '''
     initial layer : conv(3,3,32)/1, mish
 
-    in_channels  : [3, 32,  64,  64, 128,  256]
+    in_channels  : [3, 32,  64,  64, 128,  256, 512, 1024]
     mid_channels : [64, 128, 256, 512, 1024]
     out_channels : [64,  64, 128, 256,  512]
 
@@ -123,7 +123,7 @@ class DarkNet53(nn.Module) :
         self.modulelist = nn.Sequential()
         for i, num_blocks in enumerate(num_blocks_list) :
             
-            cspstage = CSPStage(in_channels = in_channels_list[i+1], 
+            cspstage = CSPStage(in_channels = in_channels_list[i+2], 
                             mid_channels = mid_channels_list[i], 
                             out_channels = out_channels_list[i], 
                             block_fn = block_fn, 
@@ -132,15 +132,19 @@ class DarkNet53(nn.Module) :
             self.modulelist.add_module(f'CSPStage_{i+1}', cspstage)
 
     def forward(self, x) :
+        output_list = []
         output = self.input_layer(x)
-        for stage in self.modulelist :
+
+        for i, stage in enumerate(self.modulelist) :
             output = stage(output)
-        return output
+            if i > 1 :
+                output_list.append(output)
+        return output_list
 
     
 
 if __name__ == '__main__' :
-    in_channels_list  = [3, 32,  64,  64, 128,  256]
+    in_channels_list  = [3, 32,  64,  64, 128,  256, 512, 1024]
     mid_channels_list = [64, 128, 256, 512, 1024]
     out_channels_list = [64,  64, 128, 256,  512]
     num_blocks_list   = [1,2,8,8,4]
