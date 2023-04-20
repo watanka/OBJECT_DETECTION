@@ -152,4 +152,4 @@ if __name__ == '__main__' :
                     num_blocks_list = num_blocks_list
                     )
 
-    model(torch.randn((1,3,512, 512))).shape
+    print(model(torch.randn((1,3,512, 512))).shape)
