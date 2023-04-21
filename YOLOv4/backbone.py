@@ -2,7 +2,7 @@
 
 import torch
 import torch.nn as nn
-
+from typing import List
 
 class BaseBlock(nn.Module) :
     def __init__(self, in_channels, out_channels, kernel_size = 1, stride = 1, padding = 0, act_fn = 'mish') :
@@ -105,6 +105,9 @@ class CSPStage(nn.Module) :
 
         return output
 
+
+
+
 class CSPResnet(nn.Module) : 
     def __init__(self, in_channels, block_fn, expansion, act_fn, num_blocks) :
         '''
@@ -164,6 +167,27 @@ class CSPResnet(nn.Module) :
         output = torch.cat([part1, part2], dim = 1)
 
         return output
+
+
+
+class SPP(nn.Module) :
+    def __init__(self, scales: List = [1,5,9,13]) :
+        super().__init__()
+        '''
+        scales : list of kernel size for maxpooling. stride is fixed 1. padding is scale // 2 to fix the output shape.
+        output : input_channel x len(scales)
+        '''
+
+        self.pool = nn.Sequential()
+        for s in scales :
+            self.pool.add_module(f'maxpool_{s}x{s}', nn.MaxPool2d(kernel_size = s, stride = 1, padding = s // 2))
+        
+    def forward(self, x) :
+        result = []
+        for pool in self.pool :
+            result.append(pool(x))
+
+        return torch.cat(result, dim = 1)
 
 
 

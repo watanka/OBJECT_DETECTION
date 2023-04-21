@@ -1,5 +1,5 @@
-batch_size: 8
-num_workers: 4
+batch_size: 4
+num_workers: 0
 train:
   imgdir: '/mnt/c/Users/user/Desktop/projects/object_detection/data/images/train'
   jsonfile: '/mnt/c/Users/user/Desktop/projects/object_detection/data/label/det_train.json'
