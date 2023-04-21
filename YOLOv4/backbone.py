@@ -48,6 +48,7 @@ class CSPStage(nn.Module) :
         '''
         input x will be channel-wise splited into part1 and part2.
         During CSP, only part2 will go through block_fn.
+        after_cspblock layer will be only applied on part2.
         downsampling layer before CSP, and transition after concatenation.
         input x : (B, C, H, W)
         part1&part2 : (B, C // 2, H, W)
@@ -104,18 +105,77 @@ class CSPStage(nn.Module) :
 
         return output
 
+class CSPResnet(nn.Module) : 
+    def __init__(self, in_channels, block_fn, expansion, act_fn, num_blocks) :
+        '''
+        input x will be channel-wise splited into part1 and part2.
+        downsampling layer before CSP, and transition applied to both part1&part2, but only part2 goes through cspblock(CSPResNet block)
+        input x : (B, C, H, W)
+        part1&part2 : (B, C // 2, H, W)
+        C should be divisible by 2.
+
+        in_channels : input channel of downsample layer.
+        block_fn : block function that will be applied on part2. For Darknet53, we are going to use DarkNetBottleneck.
+        expansion : expansion of block_fn. e.g) expansion=2, C_in -> C_out//2 -> C_out. C means channel.
+        act_fn : activation function. For DarkNet53, we are going to use mish.
+        num_blocks : number of iterations of block_fn
+        '''
+        super().__init__()
+        self.downsample = BaseBlock(in_channels, in_channels * 2 , kernel_size = 3, stride = 2, padding = 1)
+        self.cspblock = nn.Sequential()
+
+        block_channels = in_channels
+
+        for i in range(num_blocks) :
+
+            block = block_fn(in_channels = block_channels, 
+                                             out_channels = block_channels,
+                                             expansion = expansion,
+                                             act_fn = act_fn
+                                             ) # this only covers DarkNetBottleneck module.
+
+            self.cspblock.add_module(f'partial_block_{i+1}', block )
+            
+        self.part1_layer = BaseBlock(in_channels = block_channels, 
+                                        out_channels = block_channels,
+                                        kernel_size = 1,
+                                        stride = 1,
+                                        padding = 0,
+                                        )
+        
+        self.part2_layer = BaseBlock(in_channels = block_channels, 
+                                        out_channels = block_channels,
+                                        kernel_size = 1,
+                                        stride = 1,
+                                        padding = 0,
+                                        )
+
+
+    def forward(self, x) :
+        x = self.downsample(x)
+        split = x.shape[1] // 2
+        part1, part2 = x[:, :split], x[:, split:]
+
+        part2 = self.cspblock(part2)
+
+        part1 = self.part1_layer(part1)
+        part2 = self.part1_layer(part2)
+
+        output = torch.cat([part1, part2], dim = 1)
+
+        return output
+
+
 
 class DarkNet53(nn.Module) :
     '''
     initial layer : conv(3,3,32)/1, mish
 
-    in_channels  : [3, 32,  64,  64, 128,  256, 512, 1024]
-    mid_channels : [64, 128, 256, 512, 1024]
-    out_channels : [64,  64, 128, 256,  512]
+    in_channels_list  : [3, 32,  64,  64, 128,  256, 512, 1024]
 
     num_blocks of cspstage : [1,2,8,8,4]
     '''
-    def __init__(self, act_fn, block_fn, expansion, in_channels_list = [], mid_channels_list = [], out_channels_list = [], num_blocks_list = []) :
+    def __init__(self, act_fn, block_fn, expansion, csp_fn, in_channels_list = [], num_blocks_list = []) :
         super().__init__()
         
         self.input_layer = BaseBlock(in_channels_list[0], in_channels_list[1], kernel_size = 3, stride = 1, padding = 1)
@@ -123,9 +183,7 @@ class DarkNet53(nn.Module) :
         self.modulelist = nn.Sequential()
         for i, num_blocks in enumerate(num_blocks_list) :
             
-            cspstage = CSPStage(in_channels = in_channels_list[i+2], 
-                            mid_channels = mid_channels_list[i], 
-                            out_channels = out_channels_list[i], 
+            cspstage = csp_fn(in_channels = in_channels_list[i+2], 
                             block_fn = block_fn, 
                             expansion = expansion, 
                             act_fn = act_fn, num_blocks = num_blocks)
@@ -144,16 +202,23 @@ class DarkNet53(nn.Module) :
     
 
 if __name__ == '__main__' :
-    in_channels_list  = [3, 32,  64,  64, 128,  256, 512, 1024]
-    mid_channels_list = [64, 128, 256, 512, 1024]
-    out_channels_list = [64,  64, 128, 256,  512]
-    num_blocks_list   = [1,2,8,8,4]
 
-    model = DarkNet53(act_fn = 'mish', block_fn = DarkNetBottleneck, expansion = 2, 
+    # For CSPStage where concatenate channels transit to the out_channels. 
+    # in_channels_list  = [3, 32,  32, 64, 64, 128,  256, 512]
+    # mid_channels_list = [64, 128, 256, 512, 1024]
+    # out_channels_list = [64,  64, 128, 256,  512]
+    # num_blocks_list   = [1,2,8,8,4]
+
+    # For CSPResNet, concatenated channel = 2 x input channel
+
+    in_channels_list = [3, 32,  32, 64, 128,  256, 512]
+    num_blocks_list   = [1,2,8,8,4]
+    model = DarkNet53(act_fn = 'mish', block_fn = DarkNetBottleneck, expansion = 2, csp_func = CSPResnet,
                     in_channels_list = in_channels_list,
-                    mid_channels_list = mid_channels_list,
-                    out_channels_list = out_channels_list,
                     num_blocks_list = num_blocks_list
                     )
 
-    print(model(torch.randn((1,3,512, 512))).shape)
+    x1, x2, x3 = model(torch.randn((1,3,608, 608)))
+    print(x1.shape)
+    print(x2.shape)
+    print(x3.shape)
