@@ -82,7 +82,7 @@ def train(cfg : DictConfig) -> None :
     model = Yolov4(in_channels_list = [256, 512, 1024], multiscales= cfg.model.multiscales, anchorbox=cfg.model.anchorbox, num_classes=cfg.model.num_classes)            
     
     ## logger
-    tb_logger = TensorBoardLogger(save_dir = os.path.join(os.getcwd(), 'tensorboard/') , name = 'yolov3', version = '0')
+    tb_logger = TensorBoardLogger(save_dir = os.path.join(os.getcwd(), 'tensorboard/') , name = 'yolov4', version = '0')
     # print(f'Model weight will be saved with tensorboard logger {tb_logger.save_dir}.')
     ckptCallback = ModelCheckpoint(dirpath = tb_logger.save_dir, 
                                    filename = cfg.schedule.savefile_format,
@@ -92,6 +92,7 @@ def train(cfg : DictConfig) -> None :
                          accelerator="gpu", 
                          logger = tb_logger,
                          callbacks= [ckptCallback],
+                         fast_dev_run= True
                          )
 
     trainer.fit(

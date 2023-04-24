@@ -19,6 +19,9 @@ import pytorch_lightning as pl
 from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger
 
+import sys
+sys.path.append('../')
+from transform import DataAug
 
 device = torch.device(
     "cuda"
@@ -36,46 +39,12 @@ log = logging.getLogger(__name__)
 @hydra.main(config_path = '../config', config_name = 'yolov1')
 def train(cfg : DictConfig) -> None :
 
-    train_transform = A.Compose(
-    [   A.Normalize(), # mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)
-        A.geometric.resize.RandomScale(scale_limit=cfg.aug.scale_limit),
-        A.geometric.transforms.Affine(translate_percent = [cfg.aug.translation, cfg.aug.translation]), 
-        A.geometric.resize.SmallestMaxSize(max_size=cfg.model.img_size),
-        A.transforms.ColorJitter(brightness = cfg.aug.brightness, saturation = cfg.aug.saturation), 
-        A.RandomCrop(width=cfg.model.img_size, height=cfg.model.img_size, always_apply=True, p=1.0),
-        A.PadIfNeeded(min_width=cfg.model.img_size, min_height=cfg.model.img_size, border_mode=None), 
-        pytorch.transforms.ToTensorV2(),
-    ],
-    bbox_params=A.BboxParams(
-        format="pascal_voc", label_fields=["label"], min_visibility=0.8 # bounding box will be changed into yolo format after the encoding
-    ),
-)
-
-    test_transform = A.Compose(
-        [
-            A.geometric.resize.LongestMaxSize(max_size=cfg.model.img_size),
-            A.PadIfNeeded(min_width=cfg.model.img_size, min_height=cfg.model.img_size, border_mode=None),
-            A.Normalize(),
-            pytorch.transforms.ToTensorV2(),
-        ],
-        bbox_params=A.BboxParams(
-            format="pascal_voc", label_fields=["label"], min_visibility=0.8
-        ),
-    )
-
-    predict_transform = A.Compose(
-            [
-            A.geometric.resize.LongestMaxSize(max_size=cfg.model.img_size),
-            A.PadIfNeeded(min_width=cfg.model.img_size, min_height=cfg.model.img_size, border_mode=None),
-            A.Normalize(),
-            pytorch.transforms.ToTensorV2(),
-        ],
-    )
+    data_aug = DataAug(cfg)
 
     datamodule = BDDDataModule(cfg,
-                                train_transform = train_transform,
-                                test_transform = test_transform,
-                                predict_transform = predict_transform
+                                train_transform = data_aug.train_transform,
+                                test_transform = data_aug.test_transform,
+                                predict_transform = data_aug.predict_transform
                                 )
 
     model = Yolov1(num_grid= cfg.model.num_grid, numbox=cfg.model.numbox, num_classes=cfg.model.num_classes)            
@@ -98,46 +67,12 @@ def train(cfg : DictConfig) -> None :
 
 @hydra.main(config_path = '../config', config_name = 'yolov1')
 def validate(cfg : DictConfig) -> None :
-    train_transform = A.Compose(
-    [   A.Normalize(), # mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)
-        A.geometric.resize.RandomScale(scale_limit=cfg.aug.scale_limit),
-        A.geometric.transforms.Affine(translate_percent = [cfg.aug.translation, cfg.aug.translation]), 
-        A.geometric.resize.SmallestMaxSize(max_size=cfg.model.img_size),
-        A.transforms.ColorJitter(brightness = cfg.aug.brightness, saturation = cfg.aug.saturation), 
-        A.RandomCrop(width=cfg.model.img_size, height=cfg.model.img_size, always_apply=True, p=1.0),
-        A.PadIfNeeded(min_width=cfg.model.img_size, min_height=cfg.model.img_size, border_mode=None), 
-        pytorch.transforms.ToTensorV2(),
-    ],
-    bbox_params=A.BboxParams(
-        format="pascal_voc", label_fields=["label"], min_visibility=0.8 # bounding box will be changed into yolo format after the encoding
-    ),
-)
-
-    test_transform = A.Compose(
-        [
-            A.geometric.resize.LongestMaxSize(max_size=cfg.model.img_size),
-            A.PadIfNeeded(min_width=cfg.model.img_size, min_height=cfg.model.img_size, border_mode=None),
-            A.Normalize(),
-            pytorch.transforms.ToTensorV2(),
-        ],
-        bbox_params=A.BboxParams(
-            format="pascal_voc", label_fields=["label"], min_visibility=0.8
-        ),
-    )
-
-    predict_transform = A.Compose(
-            [
-            A.geometric.resize.LongestMaxSize(max_size=cfg.model.img_size),
-            A.PadIfNeeded(min_width=cfg.model.img_size, min_height=cfg.model.img_size, border_mode=None),
-            A.Normalize(),
-            pytorch.transforms.ToTensorV2(),
-        ],
-    )    
-
+    
+    data_aug = DataAug(cfg)
     datamodule = BDDDataModule( cfg,
-                                train_transform = train_transform,
-                                test_transform = test_transform,
-                                predict_transform = predict_transform
+                                train_transform = data_aug.train_transform,
+                                test_transform = data_aug.test_transform,
+                                predict_transform = data_aug.predict_transform
                                 )
 
     model = Yolov1(num_grid= cfg.model.num_grid, numbox=cfg.model.numbox, num_classes=cfg.model.num_classes)            
@@ -161,23 +96,4 @@ def validate(cfg : DictConfig) -> None :
 
 if __name__ == "__main__":
     train()    
-    # ## logger
-    # tb_logger = TensorBoardLogger("tensorboard_log", name = 'yolov1')
     
-    # ckptCallback = ModelCheckpoint(dirpath = tb_logger.save_dir, 
-    #                                filename = 'ep{epoch:02d}-val_loss{val_loss:.2f}'
-    #                                save_top_k = 2, 
-    #                                monitor = 'val_loss')
-    # trainer = pl.Trainer(max_epochs=50, 
-    #                      accelerator="gpu", 
-    #                      logger = tb_logger,
-    #                      callbacks= [ckptCallback],
-    #                      )
-
-    # trainer.fit(
-    #     model=model, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader,
-        
-        
-    # )
-
-    # trainer.validate(model=model, dataloaders=val_dataloader, ckpt_path = 'last')

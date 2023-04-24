@@ -260,7 +260,7 @@ if __name__ == '__main__' :
     import albumentations.pytorch as pytorch
 
     initialize(config_path="../config", job_name="test datamodule")
-    cfg = compose(config_name="yolov3")
+    cfg = compose(config_name="yolov4")
     print(cfg)
 
     train_transform = A.Compose(
