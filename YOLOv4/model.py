@@ -10,7 +10,7 @@ import pytorch_lightning as pl
 
 import torchvision
 import torchmetrics
-from torch.optim.lr_scheduler import LambdaLR
+from torch.optim.lr_scheduler import LambdaLR, CosineAnnealingLR
 from torchmetrics.detection.mean_ap import MeanAveragePrecision
 
 import matplotlib.pyplot as plt
@@ -242,7 +242,8 @@ class Yolov4(pl.LightningModule) :
     
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=1e-3, weight_decay = 5e-4)
-        return optimizer
+        scheduler = CosineAnnealingLR(optimizer)
+        return [optimizer], [scheduler]
 
     def training_step(self, batch, batch_idx):
         img_batch, label_grid = batch
