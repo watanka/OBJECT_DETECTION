@@ -10,7 +10,7 @@ def convert_boxformat(coords, format = 'xyxy') :
     xyxy : [xmin, ymin, xmax, ymax]
     cxcy : [x_center, y_center, width, height]
     '''
-    if format == 'xyxy' :
+    if format == 'cxcy' :
         # convert (xmin, ymin, xmax, ymax) to (x_center, y_center, width, height)
         width = coords[..., 2:3] - coords[..., 0:1]
         height = coords[..., 3:4] - coords[..., 1:2]
@@ -20,7 +20,7 @@ def convert_boxformat(coords, format = 'xyxy') :
 
         return torch.cat([x_center, y_center, width, height], axis = -1)
 
-    elif format == 'cxcy' :
+    elif format == 'xyxy' :
         # convert (x_center, y_center, width, height) to (xmin, ymin, xmax, ymax)
         width = coords[..., 2:3]
         height = coords[..., 3:4]
@@ -46,8 +46,6 @@ def IoU_width_height(box1, box2) :
 
 def IoU(box1, box2) :
     # box = [x,y,w,h]
-
-    
     box1_w = box1[..., 2:3]
     box1_h = box1[..., 3:4]
     box2_w = box2[..., 2:3]
@@ -66,20 +64,35 @@ def IoU(box1, box2) :
     box2_xmax = box2[..., 0:1] + box2_w / 2
     box2_ymax = box2[..., 1:2] + box2_w / 2
     
-    box1_topleft = torch.cat([box1_xmin, box1_ymin], axis = -1)
-    box2_topleft = torch.cat([box2_xmin, box2_ymin], axis = -1)
 
-    box1_bottomright = torch.cat([box1_xmax, box1_ymax], axis = -1)
-    box2_bottomright = torch.cat([box2_xmax, box2_ymax], axis = -1)
+    if type(box1) == np.ndarray and type(box2) == np.ndarray :
+        box1_topleft = np.concatenate([box1_xmin, box1_ymin], axis = -1)
+        box2_topleft = np.concatenate([box2_xmin, box2_ymin], axis = -1)
 
-    top_left = torch.max(box1_topleft, box2_topleft)
-    bottom_right = torch.min(box1_bottomright, box2_bottomright)
+        box1_bottomright = np.concatenate([box1_xmax, box1_ymax], axis = -1)
+        box2_bottomright = np.concatenate([box2_xmax, box2_ymax], axis = -1)
 
+        top_left = np.maximum(box1_topleft, box2_topleft)
+        bottom_right = np.minimum(box1_bottomright, box2_bottomright)
 
-
-    area_inter = torch.prod(
-        torch.clip(bottom_right - top_left, min = 0 , max = None), -1).unsqueeze(-1)
+        area_inter = np.prod(
+            np.clip(bottom_right - top_left, a_min = 0 , a_max = None), -1)[..., None]
     
+    elif type(box1) == torch.Tensor and type(box2) == torch.Tensor :
+        box1_topleft = torch.cat([box1_xmin, box1_ymin], axis = -1)
+        box2_topleft = torch.cat([box2_xmin, box2_ymin], axis = -1)
+
+        box1_bottomright = torch.cat([box1_xmax, box1_ymax], axis = -1)
+        box2_bottomright = torch.cat([box2_xmax, box2_ymax], axis = -1)
+
+        top_left = torch.max(box1_topleft, box2_topleft)
+        bottom_right = torch.min(box1_bottomright, box2_bottomright)
+
+        area_inter = torch.prod(
+            torch.clip(bottom_right - top_left, min = 0 , max = None), -1).unsqueeze(-1)
+    
+    else :
+        raise ValueError(f'{type(box1), type(box2)}')
 
 
     return area_inter / (box1_area + box2_area - area_inter + 1e-9)
@@ -132,7 +145,7 @@ classes = ['traffic sign', 'traffic light', 'car', 'rider', 'motorcycle', 'pedes
 classes_dict = {c : i for i, c in enumerate(classes)}
 label_dict = {num : clsname for clsname, num in classes_dict.items()}
 
-def visualize_bbox(img, bbox, confidence_threshold = 0.8, color=BOX_COLOR, thickness=1):
+def visualize_bbox(img, bbox, confidence_threshold = 0.8, color=BOX_COLOR, thickness=1, format = 'cxcy'):
     """
     bbox = [pred_cls, x, y, w, h, confidence_score]
     Visualizes a single bounding box on the image
@@ -140,15 +153,20 @@ def visualize_bbox(img, bbox, confidence_threshold = 0.8, color=BOX_COLOR, thick
     """
     img_h, img_w = img.shape[:2]
 
-    confidence_score, x, y, w, h, pred_cls = map(float, bbox)
+    if format == 'cxcy' :
+        confidence_score, x, y, w, h, pred_cls = map(float, bbox)
+    elif format == 'xyxy' :
+        confidence_score, x_min, y_min, x_max, y_max, pred_cls = map(float, bbox)
     pred_cls = int(pred_cls)
     if confidence_score >= confidence_threshold :
-        x_min, x_max, y_min, y_max = x - w/2, x + w/2, y - h/2, y + h/2
-        x_min = int(img_w * x_min)
-        x_max = int(img_w * x_max)
-        y_min = int(img_h * y_min)
-        y_max = int(img_h * y_max)
 
+        if format == 'cxcy' :
+            x_min, x_max, y_min, y_max = x - w/2, x + w/2, y - h/2, y + h/2
+            x_min = int(img_w * x_min)
+            x_max = int(img_w * x_max)
+            y_min = int(img_h * y_min)
+            y_max = int(img_h * y_max)
+        
         cv2.rectangle(img, (x_min, y_min), (x_max, y_max), color=color, thickness=thickness)
         
         ((text_width, text_height), _) = cv2.getTextSize(label_dict[pred_cls], cv2.FONT_HERSHEY_SIMPLEX, 0.35, 1)    
@@ -162,9 +180,11 @@ def visualize_bbox(img, bbox, confidence_threshold = 0.8, color=BOX_COLOR, thick
             color=TEXT_COLOR, 
             lineType=cv2.LINE_AA,
         )
+
+
     return img
 
-def drawboxes(img, bboxes, confidence_threshold = 0.5):
+def drawboxes(img, bboxes, confidence_threshold = 0.5, format = 'cxcy'):
     if type(img) == torch.Tensor :
         img = img.permute(1,2,0).detach().cpu().numpy()
         img = np.array(img*255., dtype = np.uint8).copy()
@@ -173,7 +193,7 @@ def drawboxes(img, bboxes, confidence_threshold = 0.5):
 
     for bbox in bboxes:
         # 04/18 : added confidence_threshold variable to filter out empty values with anchorboxes
-        img = visualize_bbox(img, bbox, confidence_threshold = confidence_threshold)
+        img = visualize_bbox(img, bbox, confidence_threshold = confidence_threshold, format = format)
     # plt.figure(figsize=(12, 12))
     # plt.axis('off')
     # plt.imshow(img)
@@ -257,7 +277,7 @@ def nms(bboxes, confidence_threshold, iou_threshold) :
 
     for label in labels :
 
-        bboxes = [box for box in bboxes if box[0] > confidence_threshold and box[-1] == label]
+        bboxes = [np.array(box) for box in bboxes if box[0] > confidence_threshold and box[-1] == label]
         # sort by highest confidence
         bboxes = sorted(bboxes, key = lambda x : x[0]) 
 
@@ -269,7 +289,7 @@ def nms(bboxes, confidence_threshold, iou_threshold) :
                 box
                 for box in bboxes
                 if box[0] != chosen_box[0] \
-                    or IoU(np.array(box[1:5]), np.array(chosen_box[1:5])) < iou_threshold
+                    or IoU(box[1:5], chosen_box[1:5]) < iou_threshold
             ]
 
             bboxes_after_nms.append(chosen_box)
