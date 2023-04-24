@@ -1,5 +1,5 @@
 자세한 내용은 블로그에 정리해두었습니다.  
-[blog](https://silvercity.notion.site)
+[blog](https://silvercity.oopy.io/306d0b40-a12f-4133-bff5-8418f2f63794)
 
 #### reference
 https://arxiv.org/pdf/2304.00501.pdf  
