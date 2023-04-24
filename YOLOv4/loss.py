@@ -147,8 +147,8 @@ class YOLOv4loss(nn.Module):
 
         # CIoU loss
         # convert boxformat cxcy to xyxy before computing loss
-        preds_xyxy = convert_boxformat(box_preds[obj], format = 'cxcy')
-        target_xyxy = convert_boxformat(target[..., 1:5][obj], format = 'cxcy')
+        preds_xyxy = convert_boxformat(box_preds[obj], format = 'xyxy')
+        target_xyxy = convert_boxformat(target[..., 1:5][obj], format = 'xyxy')
         ciou_loss = complete_box_iou_loss(preds_xyxy, target_xyxy, reduction = 'mean')
 
         

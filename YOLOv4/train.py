@@ -25,12 +25,12 @@ def train(cfg : DictConfig) -> None :
     data_aug = DataAug(cfg)
 
     datamodule = BDDDataModule(cfg,
-                                train_transform = data_augtrain_transform,
-                                test_transform = data_augtest_transform,
+                                train_transform = data_aug.train_transform,
+                                test_transform = data_aug.test_transform,
                                 predict_transform = data_aug.predict_transform
                                 )
 
-    model = Yolov4(in_channels_list = [256, 512, 1024], multiscales= cfg.model.multiscales, anchorbox=cfg.model.anchorbox, num_classes=cfg.model.num_classes)            
+    model = Yolov4(in_channels_list = cfg.model.backbone_channels, multiscales= cfg.model.multiscales, anchorbox=cfg.model.anchorbox, num_classes=cfg.model.num_classes)            
     
     ## logger
     tb_logger = TensorBoardLogger(save_dir = os.path.join(os.getcwd(), 'tensorboard/') , name = 'yolov4', version = '0')
@@ -43,7 +43,6 @@ def train(cfg : DictConfig) -> None :
                          accelerator="gpu", 
                          logger = tb_logger,
                          callbacks= [ckptCallback],
-                         fast_dev_run= True
                          )
 
     trainer.fit(

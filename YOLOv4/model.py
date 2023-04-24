@@ -14,6 +14,7 @@ from torch.optim.lr_scheduler import LambdaLR
 from torchmetrics.detection.mean_ap import MeanAveragePrecision
 
 import matplotlib.pyplot as plt
+import numpy as np
 from tqdm import tqdm
 
 from backbone import BaseBlock, DarkNetBottleneck, CSPResnet, SPP, DarkNet53
@@ -249,18 +250,21 @@ class Yolov4(pl.LightningModule) :
 
         losses = []
 
-        for scale_idx in range(len(self.multiscales)) :            
+        for scale_idx in range(len(self.multiscales)) :  
             loss = self.yolo_loss(predictions = pred_multiscales[scale_idx], target = label_grid[scale_idx], anchors = self.anchorbox[scale_idx])
             losses.append(loss)      
+        
 
         mean_loss =  sum(losses) / len(losses)
         self.log("train_loss", mean_loss)    
         
         if batch_idx % 100 == 0 :
-            bboxes_list = self.convert_bboxes(pred_multiscales)
-            bboxes_after_nms = [nms(bboxes, confidence_threshold = 0.5, iou_threshold = 0.8) for bboxes in bboxes_list]
-            grid = self.make_visgrid(bboxes_after_nms, img_batch)
-            self.logger.experiment.add_image("bbox visualization", grid, self.global_step)
+            with torch.no_grad() :
+                bboxes_list = self.convert_bboxes(pred_multiscales)
+                bboxes_after_nms = [nms(bboxes, confidence_threshold = 0.6, iou_threshold = 0.8) for bboxes in bboxes_list]
+
+                grid = self.make_visgrid(bboxes_after_nms, img_batch)
+                self.logger.experiment.add_image("bbox visualization", grid, self.global_step)
 
         return mean_loss
 
@@ -268,7 +272,7 @@ class Yolov4(pl.LightningModule) :
         '''
         prediction_batch : [scale0, scale1, scale2]
             scale{num} shape : (batch_size, self.numbox, S, S, 5 + self.num_classes). 
-            S differs by scale. [13, 26, 52]
+            S differs by scale. [19, 38, 76]
         '''
 
         BATCH_SIZE = prediction_batch[0].shape[0]
@@ -286,7 +290,7 @@ class Yolov4(pl.LightningModule) :
                 for batch_idx in range(BATCH_SIZE) :
                     bboxes_list[batch_idx] += bboxes[batch_idx]
 
-        return bboxes_list
+        return [np.array(bboxes) for bboxes in bboxes_list]
 
     def make_visgrid(self, bboxes_list, image_batch) :
         '''
@@ -312,17 +316,16 @@ class Yolov4(pl.LightningModule) :
         bboxes to torchmetrics input format
         bboxes = [[conf_score, cx, cy, w, h, cls],...]
         '''
-
-        # pred_conf, pred_coord, pred_cls = torch.tensor([]), torch.tensor([]), torch.tensor([])
-        # gt_obj, gt_coord, gt_cls = torch.tensor([]), torch.tensor([]), torch.tensor([])
-        
-        # if len(pred_bboxes) > 0 :
-        pred_bboxes = torch.tensor(pred_bboxes)
-        pred_conf, pred_coord, pred_cls = pred_bboxes[..., 0], pred_bboxes[..., 1:5], pred_bboxes[..., -1]
-
-        # if len(gt_bboxes) > 0 :
-        gt_bboxes = torch.tensor(gt_bboxes)
-        gt_obj, gt_coord, gt_cls = gt_bboxes[..., 0], gt_bboxes[..., 1:5], gt_bboxes[..., -1]
+        if len(pred_bboxes) > 0 :
+            pred_bboxes = torch.tensor(pred_bboxes)
+            pred_conf, pred_coord, pred_cls = pred_bboxes[..., 0], pred_bboxes[..., 1:5], pred_bboxes[..., -1]
+        else :
+            pred_conf, pred_coord, pred_cls = torch.tensor([]), torch.tensor([]), torch.tensor([])
+        if len(gt_bboxes) > 0 :
+            gt_bboxes = torch.tensor(gt_bboxes)
+            gt_obj, gt_coord, gt_cls = gt_bboxes[..., 0], gt_bboxes[..., 1:5], gt_bboxes[..., -1]
+        else :
+            gt_obj, gt_coord, gt_cls = torch.tensor([]), torch.tensor([]), torch.tensor([])
 
         preds = [
             dict(
@@ -370,7 +373,6 @@ class Yolov4(pl.LightningModule) :
             self.logger.experiment.add_image("bbox visualization", grid, self.global_step)
 
             gt_bboxes_list = self.convert_bboxes(label_grid_batch, is_preds = False)
-
             with torch.no_grad() :
                 
                 for idx in range(BATCH_SIZE) :
@@ -388,9 +390,8 @@ class Yolov4(pl.LightningModule) :
 
 
     def predict_step(self, img_batch, batch_idx):
-        pred = self.forward(img_batch)
+        pred_multiscales = self.forward(img_batch)
         
-        pred_bboxes_list = self.convert_bboxes(pred) 
         pred_bboxes_list = self.convert_bboxes(pred_multiscales)
         pred_bboxes_after_nms = [nms(bboxes, confidence_threshold = 0.5, iou_threshold = 0.8) for bboxes in pred_bboxes_list]
 
@@ -401,255 +402,3 @@ class Yolov4(pl.LightningModule) :
     
         return pred_bboxes_after_nms, bbox_visualization
 
-
-# class Yolov4(pl.LightningModule):
-#     def __init__(self, in_channels, multiscales, anchorbox, num_classes):
-#         super(Yolov4, self).__init__()
-
-#         self.multiscales = multiscales
-#         scaled_anchorbox = torch.tensor(anchorbox) * (torch.tensor(multiscales)[..., None, None].repeat(1, 3, 2))
-#         self.register_buffer('anchorbox', scaled_anchorbox)
-#         self.numbox = len(self.anchorbox) // len(self.multiscales)
-#         self.num_classes = num_classes
-
-#         self.architecture = architecture_config
-#         self.in_channels = in_channels
-#         self.layers = self._create_conv_layers(self.architecture)
-
-#         self.yolo_loss = YOLOv3loss(
-#             lambda_class = 1,
-#             lambda_obj = 10,
-#             lambda_noobj = 1,
-#             lambda_coord = 10,
-#         )
-
-#         self.mAP = MeanAveragePrecision(
-#             box_format="cxcywh",
-#             iou_type="bbox",
-#             iou_thresholds=None,
-#         )  # iou_thresholds = None is same as [0.5, 0.05, 0.95]
-#         # self.mAP = MeanAveragePrecisionMetrics(gts, preds, iou_threshold_range, confidence_threshold)
-
-    
-
-#     def forward(self, x):
-#         outputs = []
-#         route_connections = []
-
-#         for layer in self.layers :
-#             if isinstance(layer, ScalePrediction) :
-#                 outputs.append(layer(x))
-#                 continue
-
-#             x = layer(x)
-
-#             if isinstance(layer, ResidualBlock) and layer.num_repeats == 8 :
-#                 route_connections.append(x)
-
-#             elif isinstance(layer, nn.Upsample) :
-#                 x = torch.cat([x, route_connections[-1]], dim = 1) ##
-#                 route_connections.pop()
-
-#         return outputs
-
-
-        
-#     def _create_conv_layers(self, config):
-#         layers = nn.ModuleList()
-#         in_channels = self.in_channels
-
-#         for module in config :
-#             if isinstance(module, tuple) :
-#                 out_channels, kernel_size, stride = module
-#                 layers.append(
-#                     CNNBlock(
-#                             in_channels, 
-#                             out_channels,
-#                             kernel_size = kernel_size,
-#                             stride = stride,
-#                             padding = 1 if kernel_size == 3 else 0 
-#                             )
-#                         )
-#                 in_channels = out_channels
-
-#             elif isinstance(module, list) :
-#                 num_repeats = module[1]
-#                 layers.append(ResidualBlock(in_channels, num_repeats = num_repeats))
-
-#             elif isinstance(module, str) :
-#                 if module == 'S' :
-#                     layers += [
-#                         ResidualBlock(in_channels, use_residual= False, num_repeats= 1),
-#                         CNNBlock(in_channels, in_channels//2, kernel_size = 1),
-#                         ScalePrediction(in_channels // 2 , num_classes = self.num_classes)
-#                     ]
-#                     in_channels = in_channels//2
-#                 elif module == 'U' :
-#                     layers.append(nn.Upsample(scale_factor = 2))
-#                     in_channels = in_channels * 3 
-#         return layers
-
-
-        
-#     def configure_optimizers(self):
-#         optimizer = optim.Adam(self.parameters(), lr=1e-3, weight_decay = 5e-4)
-#         return optimizer
-
-#     def training_step(self, batch, batch_idx):
-#         img_batch, label_grid = batch
-#         pred_multiscales = self.forward(img_batch)
-
-#         losses = []
-
-#         for scale_idx in range(len(self.multiscales)) :
-#             # pred = pred_multiscales[scale_idx].contiguous().reshape(-1,  self.numbox, self.multiscales[scale_idx], self.multiscales[scale_idx], (5 + self.num_classes))
-#             loss = self.yolo_loss(predictions = pred_multiscales[scale_idx], target = label_grid[scale_idx], anchors = self.anchorbox[scale_idx])
-#             losses.append(loss)      
-
-#         mean_loss =  sum(losses) / len(losses)
-#         self.log("train_loss", mean_loss)    
-        
-#         if batch_idx % 100 == 0 :
-#             bboxes_list = self.convert_bboxes(pred_multiscales)
-#             bboxes_after_nms = [nms(bboxes, confidence_threshold = 0.5, iou_threshold = 0.8) for bboxes in bboxes_list]
-#             grid = self.make_visgrid(bboxes_after_nms, img_batch)
-#             self.logger.experiment.add_image("bbox visualization", grid, self.global_step)
-
-#         return mean_loss
-
-#     def convert_bboxes(self, prediction_batch, is_preds = True) : 
-#         '''
-#         prediction_batch : [scale0, scale1, scale2]
-#             scale{num} shape : (batch_size, self.numbox, S, S, 5 + self.num_classes). 
-#             S differs by scale. [13, 26, 52]
-#         '''
-
-#         BATCH_SIZE = prediction_batch[0].shape[0]
-
-#         bboxes_list = [[] for batch_idx in range(BATCH_SIZE)]
-#         with torch.no_grad() :
-#             # convert predictions into bboxes
-#             # initiate bboxes_list to sort bbox by batch_idx
-#             for scale_idx in range(len(self.multiscales)) :
-#                 bboxes = decode_labelgrid(prediction_batch[scale_idx],
-#                                             anchors = self.anchorbox[scale_idx],
-#                                             S = self.multiscales[scale_idx],
-#                                             is_preds = is_preds
-#                                             )
-#                 for batch_idx in range(BATCH_SIZE) :
-#                     bboxes_list[batch_idx] += bboxes[batch_idx]
-
-#         return bboxes_list
-
-#     def make_visgrid(self, bboxes_list, image_batch) :
-#         '''
-#         bboxes_list : [[obj, x, y, w, h, label] x ... ] x batch_size
-#         image batch : (batch_size, 3, imgsize, imgsize)
-#         '''
-#         with torch.no_grad() :
-#             # filter by nms and draw bbox
-#             bbox_visualization = []
-#             for img, bboxes in zip(image_batch, bboxes_list) :
-#                 bbox_img = drawboxes(img, bboxes)
-#                 bbox_visualization.append(torch.tensor(bbox_img))
-#             # hand over to to tensorboard
-#             grid_result = torch.stack(bbox_visualization).permute(0,3,1,2)
-#             grid = torchvision.utils.make_grid(grid_result)
-
-#         return grid
-            
-
-
-#     def get_predgt(self, pred_bboxes, gt_bboxes) :
-#         '''
-#         bboxes to torchmetrics input format
-#         bboxes = [[conf_score, cx, cy, w, h, cls],...]
-#         '''
-
-#         # pred_conf, pred_coord, pred_cls = torch.tensor([]), torch.tensor([]), torch.tensor([])
-#         # gt_obj, gt_coord, gt_cls = torch.tensor([]), torch.tensor([]), torch.tensor([])
-        
-#         # if len(pred_bboxes) > 0 :
-#         pred_bboxes = torch.tensor(pred_bboxes)
-#         pred_conf, pred_coord, pred_cls = pred_bboxes[..., 0], pred_bboxes[..., 1:5], pred_bboxes[..., -1]
-
-#         # if len(gt_bboxes) > 0 :
-#         gt_bboxes = torch.tensor(gt_bboxes)
-#         gt_obj, gt_coord, gt_cls = gt_bboxes[..., 0], gt_bboxes[..., 1:5], gt_bboxes[..., -1]
-
-#         preds = [
-#             dict(
-#                 boxes = pred_coord,
-#                 scores = pred_conf,
-#                 labels = pred_cls,
-#             )
-#         ]
-
-#         target = [
-#             dict(
-#                 boxes = gt_coord,
-#                 labels = gt_cls,
-#             )
-#         ]
-
-#         return preds, target
-
-
-#     def validation_step(self, batch, batch_idx):
-#         ### 100번마다 한 번씩만 validation 스코어 업데이트
-        
-#         if batch_idx % 100 == 0 :
-#             img_batch, label_grid_batch = batch
-#             pred_multiscales = self.forward(img_batch)
-            
-#             BATCH_SIZE = img_batch.shape[0]
-
-#             losses = []
-#             mean_loss = 0
-
-#             # calculate loss
-#             for scale_idx in range(len(self.multiscales)) :
-#                 # pred = pred_multiscales[scale_idx].contiguous().reshape(-1,  self.numbox, self.multiscales[scale_idx], self.multiscales[scale_idx],  (5 + self.num_classes))
-#                 loss = self.yolo_loss(predictions = pred_multiscales[scale_idx], target = label_grid_batch[scale_idx], anchors = self.anchorbox[scale_idx])
-
-#                 losses.append(loss)      
-
-#             mean_loss = sum(losses) / len(losses)
-#             self.log("val_loss", mean_loss)
-
-#             pred_bboxes_list = self.convert_bboxes(pred_multiscales)
-#             pred_bboxes_after_nms = [nms(bboxes, confidence_threshold = 0.5, iou_threshold = 0.8) for bboxes in pred_bboxes_list]
-#             grid = self.make_visgrid(pred_bboxes_after_nms, img_batch)
-#             self.logger.experiment.add_image("bbox visualization", grid, self.global_step)
-
-#             gt_bboxes_list = self.convert_bboxes(label_grid_batch, is_preds = False)
-
-#             with torch.no_grad() :
-                
-#                 for idx in range(BATCH_SIZE) :
-#                     preds, targets = self.get_predgt(pred_bboxes_after_nms[idx], gt_bboxes_list[idx])
-#                     # update on mean average precision
-#                     self.mAP.update(preds = preds, target = targets)
-
-                
-    
-#     def on_validation_epoch_end(self):
-#         self.log_dict(self.mAP.compute())
-#         self.mAP.reset()
-
-    
-
-
-#     def predict_step(self, img_batch, batch_idx):
-#         pred = self.forward(img_batch)
-        
-#         pred_bboxes_list = self.convert_bboxes(pred) 
-#         pred_bboxes_list = self.convert_bboxes(pred_multiscales)
-#         pred_bboxes_after_nms = [nms(bboxes, confidence_threshold = 0.5, iou_threshold = 0.8) for bboxes in pred_bboxes_list]
-
-#         bbox_visualization = []
-#         for idx, (img, pred_bboxes) in enumerate(zip(img_batch, pred_bboxes_after_nms)) :
-#             bbox_img = drawboxes(img, pred_bboxes, confidence_threshold = 0.5)
-#             bbox_visualization.append(bbox_img)
-    
-#         return pred_bboxes_after_nms, bbox_visualization
