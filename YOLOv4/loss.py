@@ -1,10 +1,12 @@
 import torch
 import torch.nn as nn
+from torchvision.ops import complete_box_iou_loss
 
 import sys
 
+
 sys.path.append("../")  ## TODO : cleaner way to import module in parent directory?
-from global_utils import IoU
+from global_utils import IoU, convert_boxformat
 
 class FocalLoss(nn.Module):
     # https://github.com/WongKinYiu/PyTorch_YOLOv4/blob/master/utils/loss.py
@@ -122,10 +124,9 @@ class YOLOv4loss(nn.Module):
         self.lambda_obj = lambda_obj
         self.lambda_coord = lambda_coord
         
-        self.MSEloss = nn.MSELoss(reduction="mean")
+        self.MSEloss = nn.MSELoss(reduction = 'mean')
         self.BCEloss = nn.BCEWithLogitsLoss()
-        self.CEloss = nn.CrossEntropyLoss()
-
+        self.CEloss = nn.CrossEntropyLoss(reduction = 'mean')
         self.sigmoid = nn.Sigmoid()
 
         
@@ -143,6 +144,12 @@ class YOLOv4loss(nn.Module):
         box_preds = torch.cat([self.sigmoid(predictions[..., 1:3]), torch.exp(predictions[..., 3:5]) * anchors], dim = -1)
         ious = IoU(box_preds[obj], target[..., 1:5][obj]).detach()
         object_loss = self.BCEloss( predictions[..., 0:1][obj], (ious * target[..., 0:1][obj]))
+
+        # CIoU loss
+        # convert boxformat cxcy to xyxy before computing loss
+        preds_xyxy = convert_boxformat(box_preds[obj], format = 'cxcy')
+        target_xyxy = convert_boxformat(target[..., 1:5][obj], format = 'cxcy')
+        ciou_loss = complete_box_iou_loss(preds_xyxy, target_xyxy, reduction = 'mean')
 
         
         # Box Coordinate Loss
@@ -162,4 +169,5 @@ class YOLOv4loss(nn.Module):
             + self.lambda_obj * object_loss
             + self.lambda_noobj * no_object_loss
             + self.lambda_class * class_loss
+            + ciou_loss
         )
