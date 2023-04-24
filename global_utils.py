@@ -4,6 +4,36 @@ import cv2
 import numpy as np
 
 
+def convert_boxformat(coords, format = 'xyxy') :
+    '''
+    format : ['xyxy', 'cxcy']
+    xyxy : [xmin, ymin, xmax, ymax]
+    cxcy : [x_center, y_center, width, height]
+    '''
+    if format == 'xyxy' :
+        # convert (xmin, ymin, xmax, ymax) to (x_center, y_center, width, height)
+        width = coords[..., 2:3] - coords[..., 0:1]
+        height = coords[..., 3:4] - coords[..., 1:2]
+
+        x_center = coords[..., 0:1] + width / 2
+        y_center = coords[..., 1:2] + height / 2
+
+        return torch.cat([x_center, y_center, width, height], axis = -1)
+
+    elif format == 'cxcy' :
+        # convert (x_center, y_center, width, height) to (xmin, ymin, xmax, ymax)
+        width = coords[..., 2:3]
+        height = coords[..., 3:4]
+
+        xmin = coords[..., 0:1] - width / 2
+        ymin = coords[..., 1:2] - height / 2
+        xmax = coords[..., 0:1] + width / 2
+        ymax = coords[..., 1:2] + height / 2
+
+        return torch.cat([xmin, ymin, xmax, ymax], axis = -1)
+        
+
+
 def IoU_width_height(box1, box2) :
     '''
     calculate IoU as if the center point is fixed.
@@ -214,64 +244,64 @@ def visualize_gridbbox(img, label_grid, numBox = 2, color = BOX_COLOR, thickness
 
 
     
-# def nms(bboxes, threshold, iou_threshold) :
-#     '''
-#     bboxes : [[c, x,y,w,h,class], ]. c = confidence score
-#     threshold : confidence thresholds
-#     iou_threshold : if boxes overlap over iou_threshold, eliminate from the candidates
-#     '''
-
-#     labels = set([box[-1] for box in bboxes])
-
-#     total_bboxes_after_nms = []
-
-#     for label in labels :
-
-#         bboxes = [box for box in bboxes if box[0] > threshold and box[-1] == label]
-#         # sort by highest confidence
-#         bboxes = sorted(bboxes, key = lambda x : x[0]) 
-
-#         bboxes_after_nms = []
-#         while bboxes :
-#             chosen_box = bboxes.pop()
-
-#             bboxes = [
-#                 box
-#                 for box in bboxes
-#                 if box[0] != chosen_box[0] \
-#                     or IoU(np.array(box[1:5]), np.array(chosen_box[1:5])) < iou_threshold
-#             ]
-
-#             bboxes_after_nms.append(chosen_box)
-#         total_bboxes_after_nms.extend(bboxes_after_nms)
-
-#     return np.array(total_bboxes_after_nms)
-
-def nms(predictions, confidence_threshold: float , iou_threshold: float) :
+def nms(bboxes, confidence_threshold, iou_threshold) :
     '''
-    vectorize nms
-    reference : https://blog.roboflow.com/how-to-code-non-maximum-suppression-nms-in-plain-numpy/
+    bboxes : [[c, x,y,w,h,class], ]. c = confidence score
+    threshold : confidence thresholds
+    iou_threshold : if boxes overlap over iou_threshold, eliminate from the candidates
     '''
-    predictions = np.array(predictions)
-    rows, columns = predictions.shape
 
-    sort_index = np.flip(predictions[:,0].argsort())
-    predictions = predictions[sort_index]
+    labels = set([box[-1] for box in bboxes])
 
-    boxes = predictions[:, 1:5]
-    categories = predictions[:, -1]
-    ious = vectorized_IoU(torch.tensor(boxes), torch.tensor(boxes)).detach().cpu().numpy()
-    ious = ious - np.eye(rows)
-    keep = predictions[:, 0] > confidence_threshold # np.ones(rows, dtype = bool)
+    total_bboxes_after_nms = []
 
-    for index, (iou, category) in enumerate(zip(ious, categories)) :
-        if not keep[index] :
-            continue
+    for label in labels :
+
+        bboxes = [box for box in bboxes if box[0] > confidence_threshold and box[-1] == label]
+        # sort by highest confidence
+        bboxes = sorted(bboxes, key = lambda x : x[0]) 
+
+        bboxes_after_nms = []
+        while bboxes :
+            chosen_box = bboxes.pop()
+
+            bboxes = [
+                box
+                for box in bboxes
+                if box[0] != chosen_box[0] \
+                    or IoU(np.array(box[1:5]), np.array(chosen_box[1:5])) < iou_threshold
+            ]
+
+            bboxes_after_nms.append(chosen_box)
+        total_bboxes_after_nms.extend(bboxes_after_nms)
+
+    return np.array(total_bboxes_after_nms)
+
+# def nms(predictions, confidence_threshold: float , iou_threshold: float) :
+#     '''
+#     vectorize nms
+#     reference : https://blog.roboflow.com/how-to-code-non-maximum-suppression-nms-in-plain-numpy/
+#     '''
+#     predictions = np.array(predictions)
+#     rows, columns = predictions.shape
+
+#     sort_index = np.flip(predictions[:,0].argsort())
+#     predictions = predictions[sort_index]
+
+#     boxes = predictions[:, 1:5]
+#     categories = predictions[:, -1]
+#     ious = vectorized_IoU(torch.tensor(boxes), torch.tensor(boxes)).detach().cpu().numpy()
+#     ious = ious - np.eye(rows)
+#     keep = predictions[:, 0] > confidence_threshold # np.ones(rows, dtype = bool)
+
+#     for index, (iou, category) in enumerate(zip(ious, categories)) :
+#         if not keep[index] :
+#             continue
         
-        condition = (iou > iou_threshold) & (categories == category)
-        keep = keep & ~condition
+#         condition = (iou > iou_threshold) & (categories == category)
+#         keep = keep & ~condition
 
-    return predictions[keep[sort_index.argsort()]]
+#     return predictions[keep[sort_index.argsort()]]
 
 
 ## MAP
