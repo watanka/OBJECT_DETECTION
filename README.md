@@ -1,10 +1,10 @@
 ![img](img/yolo_timeline.png)  
 
 ### Contents
-- [yolov1](YOLOv1/README.md)  
-- [yolov2](YOLOv2/README.md)  
-- [yolov3](YOLOv3/README.md)  
-- [yolov4](YOLOv4/README.md)  
+- [YOLO: You Only Look Once](YOLOv1/README.md)  
+- [YOLO9000: Better, Faster, Stronger](YOLOv2/README.md)  
+- [YOLOv3: An Incremental Improvement](YOLOv3/README.md)  
+- [YOLOv4: Optimal Speed and Accuracy of Object Detection](YOLOv4/README.md)  
 
 ### Description
 yoloV1부터 yoloV4까지 직접 구현해보았습니다. 이미 웹에 pytorch로 구현한 코드들이 많이 존재했기 때문에, 최대한 활용은 하였으나, 코드들은 전부 제 이해를 바탕으로 직접 작성한 코드들입니다.
