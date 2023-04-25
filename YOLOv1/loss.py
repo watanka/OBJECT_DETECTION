@@ -64,11 +64,6 @@ class YOLOLoss(nn.Module):
                 total_pred_coords, -1, iou_mask
             )  # (B, grid, grid, 1)
 
-            # object loss calculated for the box with the highest IoU
-            # obj_loss = self.calculate_object_loss(selected_pred_coords[..., -1], gt_coords[], identity_obj)
-            # no_obj loss calculated for entire boxes compare with the gt
-            # no_obj_loss = self.calculate_no_obj_loss(total_pred_coords, gt_coords, identity_obj )
-
             ###############
             # OBJECT LOSS #
             ###############

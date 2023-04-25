@@ -162,10 +162,10 @@ def visualize_bbox(img, bbox, confidence_threshold = 0.8, color=BOX_COLOR, thick
 
         if format == 'cxcy' :
             x_min, x_max, y_min, y_max = x - w/2, x + w/2, y - h/2, y + h/2
-            x_min = int(img_w * x_min)
-            x_max = int(img_w * x_max)
-            y_min = int(img_h * y_min)
-            y_max = int(img_h * y_max)
+            x_min = min(max(0, int(img_w * x_min)), img_w)
+            x_max = min(max(0, int(img_w * x_max)), img_w)
+            y_min = min(max(0, int(img_h * y_min)), img_h)
+            y_max = min(max(0, int(img_h * y_max)), img_h)
         
         cv2.rectangle(img, (x_min, y_min), (x_max, y_max), color=color, thickness=thickness)
         

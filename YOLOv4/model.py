@@ -25,94 +25,14 @@ import sys
 sys.path.append("../")
 from global_utils import drawboxes, nms
 
-""" 
-Information about architecture config:
-Tuple is structured by (kernel_size, filters, stride, padding) 
-"M" is simply maxpooling with stride 2x2 and kernel 2x2
-List is structured by tuples and lastly int with number of repeats
-"""
-
-architecture_config = [
-    (32, 3, 1),
-    (64, 3, 2),
-    ["B", 1],
-    (128, 3, 2),
-    ["B", 2],
-    (256, 3, 2),
-    ["B", 8],
-    (512, 3, 2),
-    ["B", 8],
-    (1024, 3, 2),
-    ["B", 4],  # To this point is Darknet-53
-    (512, 1, 1),
-    (1024, 3, 1),
-    "S",
-    (256, 1, 1),
-    "U",
-    (256, 1, 1),
-    (512, 3, 1),
-    "S",
-    (128, 1, 1),
-    "U",
-    (128, 1, 1),
-    (256, 3, 1),
-    "S",
-
-]
-
-
-
-class CNNBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, bn_act = True, **kwargs):
-        super(CNNBlock, self).__init__()
-        self.conv = nn.Conv2d(in_channels, out_channels, bias=not bn_act, **kwargs)
-        self.bn = nn.BatchNorm2d(out_channels)
-        self.leakyrelu = nn.LeakyReLU(0.1)
-        self.use_bn_act = bn_act
-
-    def forward(self, x):
-        if self.use_bn_act :
-            return self.leakyrelu(self.bn(self.conv(x)))
-        else :
-            return self.conv(x)
-
-class ResidualBlock(nn.Module) :
-    def __init__(self, channels, use_residual = True, num_repeats = 1)  :
-        super().__init__()
-        self.layers = nn.ModuleList()
-        for repeat in range(num_repeats) :
-            self.layers += [
-                nn.Sequential(
-                    CNNBlock(channels, channels//2, kernel_size = 1),
-                    CNNBlock(channels//2, channels, kernel_size = 3, padding = 1)
-                )
-            ]
-
-        self.use_residual = use_residual
-        self.num_repeats = num_repeats
-
-    def forward(self, x) :
-        for layer in self.layers :
-            x = layer(x) + x if self.use_residual else layer(x)
-        return x
-
-
-class ScalePrediction(nn.Module) :
-    def __init__(self, in_channels, num_classes) :
-        super().__init__()
-        self.pred = nn.Sequential(
-            CNNBlock(in_channels, 2*in_channels, kernel_size = 3, padding = 1),
-            CNNBlock(2 * in_channels, (num_classes + 5) * 3, bn_act = False, kernel_size = 1)
-        )
-        self.num_classes = num_classes
-
-    def forward(self, x) :
-        return (
-            self.pred(x)
-            .reshape(x.shape[0], 3, self.num_classes + 5, x.shape[2], x.shape[3])
-            .permute(0, 1, 3, 4, 2) # batch_size, 3, numgrid, numgrid, num_classes + 5
-        )
-
+# weight initialization
+def weight_init_xavier_uniform(submodule):
+    if isinstance(submodule, torch.nn.Conv2d) :
+        torch.nn.init.xavier_uniform_(submodule.weight)
+        submodule.bias.data.fill_(0.01)
+    elif isinstance(submodule, torch.nn.BatchNorm2d):
+        submodule.weight.data.fill_(1.0)
+        submodule.bias.data.zero_()
 
 
 class Yolov4(pl.LightningModule) :
@@ -189,6 +109,7 @@ class Yolov4(pl.LightningModule) :
         self.result_func2 = BaseBlock(in_channels = x2_channel, out_channels = self.final_channels, kernel_size = 1, stride = 1, padding = 0, act_fn = 'leakyrelu' )# CBL# CBL
         self.result_func3 = BaseBlock(in_channels = x3_channel, out_channels = self.final_channels, kernel_size = 1, stride = 1, padding = 0, act_fn = 'leakyrelu' )# CBL# CBL
 
+        self.apply(weight_init_xavier_uniform)
 
     # top-down : [(cbl_5, up, cbl), (cbl_5, up, cbl)]
     def top_down(self, b1, b2, b3, func1, func2) :
@@ -241,8 +162,8 @@ class Yolov4(pl.LightningModule) :
 
     
     def configure_optimizers(self):
-        optimizer = optim.Adam(self.parameters(), lr=1e-3, weight_decay = 5e-4)
-        scheduler = CosineAnnealingLR(optimizer)
+        optimizer = optim.Adam(self.parameters(), lr=1e-2, weight_decay = 5e-4)
+        scheduler = CosineAnnealingLR(optimizer, T_max = 10, eta_min = 1e-4)
         return [optimizer], [scheduler]
 
     def training_step(self, batch, batch_idx):

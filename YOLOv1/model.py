@@ -89,7 +89,20 @@ class Yolov1(pl.LightningModule):
         )  # iou_thresholds = None is same as [0.5, 0.05, 0.95]
         # self.mAP = MeanAveragePrecisionMetrics(gts, preds, iou_threshold_range, confidence_threshold)
 
+        self.apply(self.initialize_weights)
     
+    def initialize_weights(self, m):
+        if isinstance(m, nn.Conv2d):
+            nn.init.kaiming_uniform_(m.weight.data,nonlinearity='relu')
+            if m.bias is not None:
+                nn.init.constant_(m.bias.data, 0)
+        elif isinstance(m, nn.BatchNorm2d):
+            nn.init.constant_(m.weight.data, 1)
+            nn.init.constant_(m.bias.data, 0)
+        elif isinstance(m, nn.Linear):
+            nn.init.kaiming_uniform_(m.weight.data)
+            nn.init.constant_(m.bias.data, 0)
+
 
     def forward(self, x):
         x = self.darknet(x)
@@ -147,11 +160,6 @@ class Yolov1(pl.LightningModule):
 
         S, B, C = num_grid, numbox, num_classes
 
-        # In original paper this should be
-        # nn.Linear(1024*S*S, 4096),
-        # nn.LeakyReLU(0.1),
-        # nn.Linear(4096, S*S*(B*5+C))
-
         return nn.Sequential(
             nn.Flatten(),
             nn.Linear(1024 * S * S, 496),
@@ -199,15 +207,15 @@ class Yolov1(pl.LightningModule):
         self.log("train_loss", loss)
 
         if batch_idx % 100 == 0 :
-
+            pred = pred.detach().cpu()
             with torch.no_grad() :
-                bboxes_batches = [nms(convert_labelgrid(p, numbox=self.numbox, num_classes=self.num_classes), threshold = 0.0, iou_threshold = 0.8) \
+                bboxes_batches = [nms(convert_labelgrid(p, numbox=self.numbox, num_classes=self.num_classes), confidence_threshold = 0.0, iou_threshold = 0.8) \
                                     for p in pred]
 
                 bbox_visualization = []
                 for img, bboxes in zip(img_batch, bboxes_batches) :
-
-                    bbox_visualization.append(torch.tensor(visualize(img, bboxes)))
+                    
+                    bbox_visualization.append(torch.tensor(drawboxes(img, bboxes)))
 
                 grid_result = torch.stack(bbox_visualization).permute(0,3,1,2)
 

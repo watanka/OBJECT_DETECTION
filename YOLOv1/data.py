@@ -198,7 +198,7 @@ class BDDDataset(Dataset):
         label_box = np.full((self.num_grid, self.num_grid), -1)  
 
         for bbox, label in zip(bboxes, labels):
-
+            # alubmentation 에러 이슈 때문에 값을 pascal_voc(xmin,ymin,xmax,ymax)로 받고 yolo format으로 변환.
             x1, y1, x2, y2 = bbox
             label = int(label)
             w = (x2 - x1)
@@ -206,23 +206,16 @@ class BDDDataset(Dataset):
             x_center = (x1 + w / 2) / W
             y_center = (y1 + h / 2) / H
 
-            w /= W
-            h /= H
+            w = w/W * self.num_grid
+            h = h/H * self.num_grid
 
             assert H == W, f"yolov1 takes only square image size. H = {H}, W = {W}"
-            gridsize = 1 / self.num_grid
-
-            grid_xidx = min(
-                max(0, int(x_center // gridsize)), self.num_grid - 1
-            )  # there are cases center of bbox located at the endpoint
-            grid_yidx = min(max(0, int(y_center // gridsize)), self.num_grid - 1)
-
-            ## normalize respect to the grid point
-            grid_x0 = gridsize * grid_xidx
-            grid_y0 = gridsize * grid_yidx
-
-            normalized_x = (x_center - grid_x0) / gridsize
-            normalized_y = (y_center - grid_y0) / gridsize
+            
+            grid_xidx = int(self.num_grid * x_center)
+            grid_yidx = int(self.num_grid * y_center)
+            
+            normalized_x = x_center * self.num_grid - grid_xidx
+            normalized_y = y_center * self.num_grid - grid_yidx
 
             boxnum = grid_idxbox[grid_yidx][grid_xidx]
 
