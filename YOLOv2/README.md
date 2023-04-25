@@ -1,3 +1,5 @@
+[blog post](https://silvercity.oopy.io/acfeb321-c9f6-4722-a7d6-2ba3acb36f8f)  
+
 ### new features  
 - batch normalization
 - higher resolution backbone (DarkNet19)
@@ -6,6 +8,3 @@
 - direct location prediction
 - 13x13 grid
 - passthrough layer like ResNet at the end
-- 
-[ ] mulit-scale training
-- 
