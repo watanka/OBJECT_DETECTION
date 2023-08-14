@@ -1,5 +1,5 @@
 ## YOLO: You Only Look Once
-[blog post](https://silvercity.oopy.io/a28ef9b8-4f33-4cc1-9077-00c0d984c521)
+[blog post](https://silvercity.oopy.io/e8926acf-90af-46d2-82e2-468cdc680fd6)
 #### features
 - direct prediction from image grid
 - each grid can have two boxes
