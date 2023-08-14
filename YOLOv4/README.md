@@ -1,5 +1,5 @@
 ## YOLOv4: Optimal Speed and Accuracy of Object Detection
-[blog post](https://silvercity.oopy.io/99351baa-19e3-4181-a4d3-9bcde862ea1c)  
+[blog post](https://silvercity.oopy.io/8a3e2f67-a8db-411a-a11c-a6cab48751ec)  
 ### model architecture
 ![img](../img/yolov4_architecture.png) 
 
