@@ -1,5 +1,5 @@
 ## YOLOv3: An Incremental Improvement
-[blog post](https://silvercity.oopy.io/2115737e-1872-4267-a1bd-7d5b91c3db23)
+[blog post](https://silvercity.notion.site/YOLOv3-An-Incremental-Improvement-2115737e18724267a1bd7d5b91c3db23)
 ### model architecture
 ![img](../img/yolov3_architecture.png) 
 
