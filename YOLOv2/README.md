@@ -1,5 +1,5 @@
 ## YOLO9000: Better, Faster, Stronger
-[blog post](https://silvercity.oopy.io/61538bf0-b66a-4ca4-be3d-a9b80e22c4f5)  
+[blog post](https://silvercity.notion.site/YOLO9000-Better-Faster-Stronger-61538bf0b66a4ca4be3da9b80e22c4f5)  
 
 ### new features  
 - batch normalization
